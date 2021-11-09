@@ -8,14 +8,12 @@ class AssignmentVisitor(ast.NodeVisitor):
         self.leftOperand = ''
         self.rightOperand = ''
 
+    def visit_Add(self, node):
+        assigns.get(self.leftOperand) + assigns.get(self.rightOperand)
     def visit_Assign(self, node):
         for target in node.targets:
             if isinstance(target, ast.Name) & isinstance(node.value, ast.Constant):
                 assigns[target.id] = node.value.value
-
-    def visit_Add(self, node):
-        assigns.get(self.leftOperand) + assigns.get(self.rightOperand)
-
     def visit_AugAssign(self, node):
         if isinstance(node.value, ast.Name) & isinstance(node.target, ast.Name):
             assigns[node.target.id] = assigns.get(node.target.id) + assigns.get(node.value.id)
@@ -25,12 +23,18 @@ class AssignmentVisitor(ast.NodeVisitor):
             self.rightOperand = node.right.id
         if isinstance(node.op, ast.Add):
             self.visit_Add(node.op)
-
+    def visit_Constant(self, node):
+        return node.value
     def visit_Expr(self, node):
         if isinstance(node.value, ast.BinOp):
             self.visit_BinOp(node.value)
-
-
+    def visit_If(self, node):
+        if self.visit(node.test):
+            for n in node.body:
+                self.visit(n)
+        elif node.orelse:
+            for n in node.orelse:
+                self.visit(n)
 def main(text):
     usage_analyzer = AssignmentVisitor()
     tree = ast.parse(text)
@@ -40,4 +44,4 @@ def main(text):
 
 
 if __name__ == '__main__':
-    main("""a = 1\nb = 9\nc = 4\na = 3\na + c\na += c\nb = a + c\n""")
+    main("""a = 1\nb = 9\nc = 4\na = 3\na + c\na += c\nb = a + c\nif False:\n\ta = False\nelse:\n\ta = True""")
