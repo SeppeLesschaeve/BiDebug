@@ -18,6 +18,12 @@ class SourceVisitor(ast.NodeVisitor):
         self.set_left_operand(left_operand)
         self.set_right_operand(right_operand)
 
+    def visit_Constant(self, node):
+        return node.value
+
+    def visit_Name(self, node):
+        return self.source[node.id]
+
     def visit_Assign(self, node):
         for target in node.targets:
             if isinstance(target, ast.Name):
@@ -114,13 +120,12 @@ class SourceVisitor(ast.NodeVisitor):
 
     def visit_If(self, node):
         if isinstance(node.test, ast.BoolOp):
-            result = self.visit_BoolOp(node.test)
-        if result:
-            for n in node.body:
-                self.visit(n)
-        elif node.orelse:
-            for n in node.orelse:
-                self.visit(n)
+            if self.visit_BoolOp(node.test):
+                for n in node.body:
+                    self.visit(n)
+            elif node.orelse:
+                for n in node.orelse:
+                    self.visit(n)
 
     def visit_BoolOp(self, node):
         if len(node.values) == 2:
@@ -140,8 +145,35 @@ class SourceVisitor(ast.NodeVisitor):
             for n in node.body:
                 self.visit(n)
 
+    def visit_FunctionDef(self, node):
+        self.source[node.name] = []
+        arguments = []
+        if isinstance(node.args.args, list):
+            for argument in node.args.args:
+                if isinstance(argument, ast.arg):
+                    arguments.append('_' + argument.arg)
+        self.source[node.name].append(arguments)
+        self.source[node.name].append(node.body)
+
+    def visit_Call(self, node):
+        mustOverride = []
+        if isinstance(node.func, ast.Name):
+            for i in range(0, len(self.source[node.func.id][0])):
+                temp = self.source[node.func.id][0][i]
+                self.source[temp] = self.visit(node.args[i])
+                if isinstance(node.args[i], ast.Constant):
+                    mustOverride.append(False)
+                if isinstance(node.args[i], ast.Name):
+                    if self.is_immutable(self.source[node.args[i].id]):
+                        mustOverride.append(False)
+                    else:
+                        mustOverride.append(True)
+
+    def is_immutable(self, obj):
+        return isinstance(obj, tuple) or isinstance(obj, int) or isinstance(obj, float) \
+               or isinstance(obj, complex) or isinstance(obj, str) or isinstance(obj, bytes)
+
     def visit_For(self, node):
-        k = 2
         if isinstance(node.iter, ast.Name):
             for i in range(0, len(self.source[node.iter.id])):
                 temp = self.source[node.iter.id][i]
@@ -151,6 +183,15 @@ class SourceVisitor(ast.NodeVisitor):
                     self.visit(n)
                     self.source[node.iter.id][i] = self.source[node.target.id]
             self.source.pop(node.target.id)
+
+    def visit_Expr(self, node):
+        if isinstance(node.value, ast.Call):
+            if isinstance(node.value.args, list):
+                for argument in node.value.args:
+                    self.visit(argument)
+
+            self.visit_Call(node.value)
+
 
 
 def main(source):
@@ -162,15 +203,16 @@ def main(source):
 
 
 if __name__ == '__main__':
-    text = """a = 2
+    text = """def test(a, b, l):
+    a += 1
+    b += 1
+    c = a + b 
+    l.append(c)
+    
+    
+a = 2
 b = 4
-c = a + b
-a = a + c
 ll = [1, 2, 3, 4]
-a += b
-a += a * b
-a += ll[2]
-ll[3] += b
 if (a * 2 >= 4) and (1 > a or b > 3):
     c = 2
     while c > 0:
@@ -184,7 +226,7 @@ else:
         b += 1
 if (a * 2 >= 4) and (1 > a or b > 3):
     for i in ll:
-        i /= i
+        i = 2
     for i in range(0, len(ll)):
         ll[i] *= ll[i]
     else:
@@ -194,5 +236,6 @@ else:
     while c > 0:
         c -= 1
 a = 4
-b += a"""
+b += a
+test(a, 1, ll)"""
     main(text)
