@@ -72,6 +72,8 @@ class SourceVisitor(ast.NodeVisitor):
         self.visit(op)
 
     def evaluateComputation(self, value):
+        if isinstance(value, ast.Constant):
+            return value.value
         if isinstance(value, ast.Name):
             return self.source[value.id]
         if isinstance(value, ast.BinOp):
@@ -82,6 +84,44 @@ class SourceVisitor(ast.NodeVisitor):
             if isinstance(value.slice, ast.Index):
                 if isinstance(value.slice.value, ast.Constant) & isinstance(value.value, ast.Name):
                     return self.source[value.value.id][value.slice.value.value]
+
+    def visit_Compare(self, node):
+        self.left_operand = self.evaluateComputation(node.left)
+        for c in node.comparators:
+            if isinstance(c, ast.Constant):
+                self.right_operand = c.value
+        for o in node.ops:
+            self.visit(o)
+
+    def visit_GtE(self, node):
+        return self.left_operand >= self.right_operand
+
+    def visit_Expr(self, node):
+        if isinstance(node.value, ast.BinOp):
+            self.visit_BinOp(node.value)
+
+    def visit_If(self, node):
+        if isinstance(node.test, ast.BinOp):
+            self.visit(node.test)
+        if self.temp_result:
+            for n in node.body:
+                self.visit(n)
+        elif node.orelse:
+            for n in node.orelse:
+                self.visit(n)
+
+    def visit_BinOp(self, node):
+        if isinstance(node.left, ast.Compare) & isinstance(node.right, ast.Compare):
+            self.set_operands(self.visit_Compare(node.left), self.visit_Compare(node.right))
+            self.visit(node.op)
+
+    def visit_While(self, node):
+        while self.visit(node.test):
+            for n in node.body:
+                self.visit(n)
+        if node.orelse:
+            for n in node.orelse:
+                self.visit(n)
 
 
 def main(source):
