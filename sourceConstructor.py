@@ -142,6 +142,15 @@ class SourceVisitor(ast.NodeVisitor):
 
     def visit_For(self, node):
         k = 2
+        if isinstance(node.iter, ast.Name):
+            for i in range(0, len(self.source[node.iter.id])):
+                temp = self.source[node.iter.id][i]
+                if isinstance(node.target, ast.Name):
+                    self.source[node.target.id] = temp
+                for n in node.body:
+                    self.visit(n)
+                    self.source[node.iter.id][i] = self.source[node.target.id]
+            self.source.pop(node.target.id)
 
 
 def main(source):
@@ -174,10 +183,10 @@ else:
     else:
         b += 1
 if (a * 2 >= 4) and (1 > a or b > 3):
-    for i in range(0, len(ll)):
-        ll[i] *= ll[i]
     for i in ll:
         i /= i
+    for i in range(0, len(ll)):
+        ll[i] *= ll[i]
     else:
         b += 1
 else:
