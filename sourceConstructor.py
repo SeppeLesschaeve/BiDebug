@@ -34,9 +34,8 @@ class SourceVisitor(ast.NodeVisitor):
     def visit_Assign(self, node):
         for target in node.targets:
             self.source[self.visit(target)] = self.visit(node.value)
-            if self.visit(target) in self.referencePool:
-                self.updateAll(self.visit(target))
-                print(self.source)
+            self.updateAll(self.visit(target))
+            print(self.source)
 
     def visit_Add(self, node):
         return self.left_operand + self.right_operand
@@ -127,7 +126,7 @@ class SourceVisitor(ast.NodeVisitor):
         return self.left_operand or self.right_operand
 
     def visit_While(self, node):
-        while self.visit_Compare(node.test):
+        while self.visit(node.test):
             for n in node.body:
                 self.visit(n)
 
@@ -142,20 +141,15 @@ class SourceVisitor(ast.NodeVisitor):
         self.source[node.name].append(node.body)
 
     def visit_Call(self, node):
-        if isinstance(node.func, ast.Attribute) or (isinstance(node.func, ast.Name) and node.func.id not in self.source):
+        if self.isBuiltin(node):
             return self.visit_Builtin(node)
         ts = self.source
-        tempSource = self.buildTempSource(node)
-        self.updateReferencePoolFromCall(tempSource)
-        computateablesource = {}
-        for key in tempSource:
-            computateablesource[key] = tempSource[key][0][0]
-        self.source = computateablesource
+        self.updateReferencePoolFromCall(node)
+        self.source = self.buildTempSource(node)
         for statement in ts[node.func.id][1]:
             self.visit(statement)
-        for key in tempSource:
-            if len(tempSource[key]) == 2:
-                ts[tempSource[key][1][0]] = self.source[key]
+        for key in self.referencePool:
+            ts[key] = self.source[self.referencePool[key][0]]
         self.source = ts
 
     def is_immutable(self, obj):
@@ -164,16 +158,16 @@ class SourceVisitor(ast.NodeVisitor):
 
     def visit_For(self, node):
         if isinstance(node.iter, ast.Name):
-            for i in range(0, len(self.source[node.iter.id])):
-                temp = self.source[node.iter.id][i]
-                if isinstance(node.target, ast.Name):
-                    self.source[node.target.id] = temp
+            listLabel = self.visit(node.iter)
+            for i in range(0, len(self.source[listLabel])):
+                temp = self.source[listLabel][i]
+                self.source[self.visit(node.target)] = temp
                 for n in node.body:
                     self.visit(n)
-                    self.source[node.iter.id][i] = self.source[node.target.id]
+                    self.source[listLabel][i] = self.source[self.visit(node.target)]
             self.source.pop(node.target.id)
         if isinstance(node.iter, ast.Call):
-            bounds = self.visit_Call(node.iter)
+            bounds = self.visit(node.iter)
             for j in range(bounds[0], bounds[1]):
                 self.source[node.target.id] = j
                 for n in node.body:
@@ -203,20 +197,15 @@ class SourceVisitor(ast.NodeVisitor):
         tempSource = {}
         if isinstance(node.args, list):
             for i in range(0, len(node.args)):
-                tempArg = self.visit(node.args[i])
-                if self.is_immutable(self.source[self.visit(node.args[i])]):
-                    tempSource[self.source[node.func.id][0][i]] = [[self.source[self.visit(node.args[i])]]]
+                if self.visit(node.args[i]) in self.source:
+                    tempSource[self.source[node.func.id][0][i]] = self.source[self.visit(node.args[i])]
                 else:
-                    tempSource[self.source[node.func.id][0][i]] = [[self.source[self.visit(node.args[i])]], [tempArg]]
+                    tempSource[self.source[node.func.id][0][i]] = self.visit(node.args[i])
         for j in range(0, len(node.keywords)):
-            if isinstance(node.keywords[j].value, ast.Constant):
-                tempSource[node.keywords[j].arg] = [[self.visit(node.keywords[j].value)]]
+            if self.visit(node.keywords[j].value) in self.source:
+                tempSource[node.keywords[j].arg] = self.source[self.visit(node.keywords[j].value)]
             else:
-                tempId = self.visit(node.keywords[j].value)
-                if self.is_immutable(self.source[self.visit(node.keywords[j].value)]):
-                    tempSource[node.keywords[j].arg] = [[self.source[self.visit(node.keywords[j].value)]]]
-                else:
-                    tempSource[node.keywords[j].arg] = [[self.source[self.visit(node.keywords[j].value)]], [tempId]]
+                tempSource[node.keywords[j].arg] = self.visit(node.keywords[j].value)
         return tempSource
 
     def updateAll(self, updated_reference):
@@ -227,15 +216,28 @@ class SourceVisitor(ast.NodeVisitor):
                     if reference is not updated_reference:
                         self.source[reference] = updated_value
 
-    def updateReferencePoolFromCall(self, tempSource):
+    def updateReferencePoolFromCall(self, node):
         references = {}
-        for key in tempSource:
-            if len(tempSource[key]) == 2:
-                if tempSource[key][1][0] not in references:
-                    references[tempSource[key][1][0]] = [key]
+        if isinstance(node.args, list):
+            for i in range(0, len(node.args)):
+                tempArg = self.visit(node.args[i])
+                if tempArg in self.source and not self.is_immutable(self.source[tempArg]):
+                    if tempArg not in references:
+                        references[tempArg] = [self.source[node.func.id][0][i]]
+                    else:
+                        references[tempArg].append(self.source[node.func.id][0][i])
+        for j in range(0, len(node.keywords)):
+            tempArg = self.visit(node.keywords[j].value)
+            if tempArg in self.source and not self.is_immutable(self.source[tempArg]):
+                if tempArg not in references:
+                    references[tempArg] = [node.keywords[j].arg]
                 else:
-                    references[tempSource[key][1][0]].append(key)
+                    references[tempArg].append(node.keywords[j].arg)
         self.referencePool = references
+
+    def isBuiltin(self, node):
+        return isinstance(node.func, ast.Attribute) \
+               or (isinstance(node.func, ast.Name) and node.func.id not in self.source)
 
 
 def main(source):
