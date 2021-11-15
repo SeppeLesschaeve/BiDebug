@@ -1,4 +1,5 @@
 import ast
+import builtins
 
 
 class SourceVisitor(ast.NodeVisitor):
@@ -99,6 +100,15 @@ class SourceVisitor(ast.NodeVisitor):
     def visit_In(self, node):
         return self.left_operand in self.right_operand
 
+    def visit_NotIn(self, node):
+        return self.left_operand not in self.right_operand
+
+    def visit_IsNot(self, node):
+        return self.left_operand is not self.right_operand
+
+    def visit_Is(self, node):
+        return self.left_operand is self.right_operand
+
     def visit_Expr(self, node):
         self.visit(node.value)
 
@@ -165,33 +175,27 @@ class SourceVisitor(ast.NodeVisitor):
                 for n in node.body:
                     self.visit(n)
                     self.source[listLabel][i] = self.source[self.visit(node.target)]
-            self.source.pop(node.target.id)
         if isinstance(node.iter, ast.Call):
-            bounds = self.visit(node.iter)
-            for j in range(bounds[0], bounds[1]):
+            for j in self.visit(node.iter):
                 self.source[node.target.id] = j
                 for n in node.body:
                     self.visit(n)
-            self.source.pop(node.target.id)
+        self.source.pop(node.target.id)
 
     def visit_Expr(self, node):
-        if isinstance(node.value, ast.Call):
-            self.visit_Call(node.value)
+        self.visit(node.value)
 
     def visit_Builtin(self, node):
+        arguments = []
+        for arg in node.args:
+            if self.visit(arg) in self.source:
+                arguments.append(self.source[self.visit(arg)])
+            else:
+                arguments.append(self.visit(arg))
         if isinstance(node.func, ast.Attribute):
-            if node.func.attr == 'append':
-                self.set_operands(self.visit(node.func.value), self.visit(node.args[0]))
-                self.source[self.visit(node.func.value)] = self.visit_append()
-                self.updateAll(self.visit(node.func.value))
+            getattr(self.source[self.visit(node.func.value)], node.func.attr)(*arguments)
         if isinstance(node.func, ast.Name):
-            if node.func.id == 'len':
-                return len(self.source[node.args[0].id])
-            if node.func.id == 'range':
-                return [self.visit(node.args[0]), self.visit(node.args[1])]
-
-    def visit_append(self):
-        return self.left_operand + [self.right_operand]
+            return getattr(builtins, node.func.id)(*arguments)
 
     def buildTempSource(self, node):
         tempSource = {}
@@ -254,6 +258,8 @@ if __name__ == '__main__':
     b += 1
     c = 1 + b 
     l.append(c)
+    l.pop()
+    l.sort()
     if 1 in l:
         l.append(1)
     d = range(0, len(l))
