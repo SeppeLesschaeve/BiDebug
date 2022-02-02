@@ -11,6 +11,7 @@ class SourceVisitor(ast.NodeVisitor):
         self.returnValue = None
 
     def unpack(self,v):
+        """Unpacks a variable such that the return value is its actual value, not its name."""
         if isinstance(v,ast.Name):
             return self.source[self.visit(v)]
         return self.visit(v)
@@ -284,6 +285,7 @@ class SourceVisitor(ast.NodeVisitor):
         return type(obj) in immutables
 
     def visit_Return(self, node):
+        """Visits a return statement and assigns its evaluated value to the class' return value field."""
         self.returnValue = self.visit(node.value)
 
     #The iterator must be a deep copy of the associated element of the list.
@@ -338,6 +340,7 @@ class SourceVisitor(ast.NodeVisitor):
     def buildTempSource(self, node):
         """
         Builds and returns a temporary source from our current source that encompasses only those entries that the node would need to see.
+        Those entries would be the function argument, globals (currently not supported) and function definitions.
         Keyword arguments:
             node -- a Call node, containing the _ relevant fields:
                 func -- a name object for the function, containing the relevant field
@@ -362,11 +365,13 @@ class SourceVisitor(ast.NodeVisitor):
         return tempSource
 
     def addAllFunctions(self,tempSource):
+        """Adds all functions in source to the given temporary source."""
         for f in self.source:
             if self.isFunction(f):
                 tempSource[f] = self.source[f]
     
     def isFunction(self,f):
+        """Checks if the given node is a function defined in source."""
         if not isinstance(self.source[f],list):
             return False
         return isinstance(self.source[f][1],ast.Return) or isinstance(self.source[f][1],ast.Expr)   #Niet zeker of dit niet simpeler kan
@@ -384,6 +389,18 @@ class SourceVisitor(ast.NodeVisitor):
                         self.source[reference] = updated_value
 
     def makeReferencePool(self,node):
+        """
+        Constructs a reference pool for mutables in a function call as follows:
+            {function_parameter : source_variable}
+        This is structured this way so that the keys are unique,
+        even if a variable is passed to multiple different function parameters.
+        Key arguments:
+            node -- A Call object containing the following two relevant fields:
+                keywords -- a list of keyword arguments to the function call
+                args     -- a list of arguments to the function call, containing the following two relevant field:
+                    arg   -- the id for the argument as seen by the function itself, the function parameter name
+                    value -- the id for the argument as seen by source, the caller argument
+        """
         references = {}
         if not isinstance(node.args,list):
             raise RuntimeError("Incorrect function call: arguments are not in a list.")
