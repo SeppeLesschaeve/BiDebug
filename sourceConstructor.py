@@ -246,6 +246,7 @@ class SourceVisitor(ast.NodeVisitor):
                     arguments.append(argument.arg)
         self.source[node.name].append(arguments)
         self.source[node.name].append(node.body[0])
+        print(self.source)
 
     #Hier gaan we nog iets moeten returnen als het laatste argument een return command is.
     def visit_Call(self, node):
@@ -310,7 +311,7 @@ class SourceVisitor(ast.NodeVisitor):
         Keyword arguments:
             node -- A Call node object, containing the two relevant fields:
                 args -- a collection of arguments to the function
-                func -- a FuncDef node containing the built-in function to be evaluated
+                func -- a FunctionDef node containing the built-in function to be evaluated
         """
         arguments = []
         for arg in node.args:
