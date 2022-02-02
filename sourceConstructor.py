@@ -1,6 +1,5 @@
 import ast
 import builtins
-import copy
 
 immutables = {tuple,int,float,complex,str,bytes}
 class SourceVisitor(ast.NodeVisitor):
@@ -271,7 +270,6 @@ class SourceVisitor(ast.NodeVisitor):
         if self.isBuiltin(node):
             return self.visit_Builtin(node)
         self.makeReferencePool(node)
-        #self.updateReferencePoolFromCall(node)
         ts = self.buildTempSource(node)
         funcenv = SourceVisitor(ts)
         funcenv.visit(ts[node.func.id][1])
@@ -327,11 +325,7 @@ class SourceVisitor(ast.NodeVisitor):
         """
         arguments = []
         for arg in node.args:
-            visitedArg = self.visit(arg)
-            if visitedArg in self.source:
-                arguments.append(self.source[visitedArg])
-            else:
-                arguments.append(visitedArg)
+            arguments.append(self.unpack(arg))
         if isinstance(node.func, ast.Attribute):
             getattr(self.source[self.visit(node.func.value)], node.func.attr)(*arguments)
         if isinstance(node.func, ast.Name):
@@ -468,6 +462,6 @@ else:
 a = 4
 b += a
 test(ll, l = ll, b = 1)
-print(a,b,c,i,ll)
+print(a,b,c,ll)
 """
     main(text)
