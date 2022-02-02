@@ -4,27 +4,14 @@ import builtins
 class SourceVisitor(ast.NodeVisitor):
 
     def __init__(self):
-        self.left_operand = 0
-        self.right_operand = 0
         self.source = {}
         self.referencePool = {}
         self.immutables = {tuple,int,float,complex,str,bytes}
 
-    def set_left_operand(self, left_operand):
-        if left_operand in self.source: #werkt niet wanneer left_operand unhashable is (bijv. list)
-            self.left_operand = self.source[left_operand]
-        else:
-            self.left_operand = left_operand
-
-    def set_right_operand(self, right_operand):
-        if right_operand in self.source:
-            self.right_operand = self.source[right_operand]
-        else:
-            self.right_operand = right_operand
-
-    def set_operands(self, left_operand, right_operand):
-        self.set_left_operand(left_operand)
-        self.set_right_operand(right_operand)
+    def unpack(self,v):
+        if isinstance(v,ast.Name):
+            return self.source[self.visit(v)]
+        return self.visit(v)
 
     def visit_Constant(self, node):
         """Returns the value contained by the node."""
@@ -44,11 +31,11 @@ class SourceVisitor(ast.NodeVisitor):
                 value   -- a value that must be assigned to the given targets
         """
         for target in node.targets:
-            self.source[self.visit(target)] = self.visit(node.value)
-            self.updateAll(self.visit(target))
+            print(self.unpack(node.value))
+            self.source[self.visit(target)] = self.unpack(node.value)
+            #self.updateAll(self.visit(target)) moet volgens mij niet, omdat we werken met references, niet values.
             print(self.source)
 
-    #To-do: De left en right operands staan in binOp, dus we kunnen daar beter checken 
     # welke op we moeten doen en die daar dan uitvoeren of met een functie afhandelen.
     def visit_Add(self, node):
         """Returns a binary addition function."""
@@ -76,11 +63,10 @@ class SourceVisitor(ast.NodeVisitor):
                 value  -- the value that should be operated with the value of the target
         """
         visitedTarget = self.visit(node.target)
-        visitedValue = self.visit(node.value)
+        unpackedValue = self.unpack(node.value)
         f = self.visit(node.op)
         if visitedTarget in self.source:
-            self.source[visitedTarget] = f(visitedTarget,visitedValue)
-            self.set_operands(self.visit(node.target), self.visit(node.value))
+            self.source[visitedTarget] = f(self.source[visitedTarget],unpackedValue)
         #if self.visit(node.target) in self.source:
         #    self.source[self.visit(node.target)] = self.visit(node.op)
         #    self.updateAll(self.visit(node.target))
@@ -91,13 +77,14 @@ class SourceVisitor(ast.NodeVisitor):
 
     def visit_Subscript(self, node):
         """Returns the slice of a collection in source that corresponds to the slice contained within the given Subscript node."""
-        visitedValue = self.visit(node.value)
-        if isinstance(node.slice,ast.Name): #tijdelijke fix voor wanneer er een lijst wordt gemaakt, er klopt wel nog niet iets met dat visitedValue een str is.
-            return self.source[visitedValue][0:len(visitedValue)-1]
-        return self.source[self.visit(node.value)][self.visit(node.slice)]
+        slce = self.unpack(node.slice)
+        val = self.unpack(node.value)
+        return val[slce]
 
     def visit_slice(self,node):
+        """Returns a slice of indices for the given Slice node."""
         return range(node.lower,node.upper)
+        #of kan ook een slice values van de lijst zelf zijn, als ik het niet juist geïnterpreteerd heb zoals het er staat
 
     #Is deprecated volgens de docs
     def visit_Index(self, node):
@@ -111,17 +98,24 @@ class SourceVisitor(ast.NodeVisitor):
         Returns a boolean that is true iff (node.left `operator` node.right) is satisfied.
         Keyword arguments:
             node -- A Compare node, containing the three relevant fields:
-                left        -- A BinOp node, containing the lefthand side of the comparison
+                left        -- A node containing the lefthand side of the comparison
                 comparators -- A collection of righthand sides for the comparison
                 ops         -- A collection of comparator operators for the comparison
         Returns:
-            self.visit(o) -- the boolean result of the evaluated comparison dictated by the node
+            the result of the comparison.
         """
-        self.set_left_operand(self.visit(node.left))
+        lefthand = self.unpack(node.left)
+        comps = [lefthand]
         for c in node.comparators:
-            self.set_right_operand(self.visit(c))
+            temp = self.unpack(c)
+            comps.append(temp)
+        fs = []
         for o in node.ops:
-            return self.visit(o)
+            fs.append(self.visit(o))
+        b = fs[0](comps[0],comps[1])
+        for i in range(1,len(fs)):
+            b = fs[i](b,comps[i])
+        return b
 
     def visit_Eq(self, node):
         """Returns a binary equality function."""
@@ -162,20 +156,20 @@ class SourceVisitor(ast.NodeVisitor):
         return elements
 
     def visit_In(self, node):
-        """Returns a boolean indicating whether or not the left operand is contained within the right operand collection."""
-        return self.left_operand in self.right_operand
+        """Returns a binary in operation."""
+        return lambda a,b : a in b
 
     def visit_NotIn(self, node):
-        """Returns a boolean indicating whether or not the left operand is not contained within the right operand collection."""
-        return self.left_operand not in self.right_operand
+        """Returns a binary not-in operation."""
+        return lambda a,b : a not in b
 
     def visit_IsNot(self, node):
-        """Returns a boolean indicating whether or not the left operand is not the right operand."""
-        return self.left_operand is not self.right_operand
+        """Returns a binary is-not operation."""
+        return lambda a,b : a is not b
 
     def visit_Is(self, node):
-        """Returns a boolean indicating whether or not the left operand is the right operand."""
-        return self.left_operand is self.right_operand
+        """Returns a binary is operation."""
+        return lambda a,b : a is b
 
     def visit_Expr(self, node):
         """Visits the expression contained by the node."""
@@ -183,12 +177,11 @@ class SourceVisitor(ast.NodeVisitor):
 
     def visit_BinOp(self, node):
         """Visits the binary operation contained by the node."""
-        lefthand = self.visit(node.left)
-        righthand = self.visit(node.right)
+        lefthand = self.unpack(node.left)
+        righthand = self.unpack(node.right)
         f = self.visit(node.op)
         op = node.op
         return f(lefthand,righthand)
-        #self.set_operands(self.visit(node.left), self.visit(node.right))
         #return self.visit(node.op)
 
     def visit_If(self, node):
@@ -210,13 +203,11 @@ class SourceVisitor(ast.NodeVisitor):
     def visit_BoolOp(self, node):
         """Visits the boolean operation contained within the node."""
         if len(node.values) != 2:
-            raise RuntimeError("Binary op did not receive exactly 2 arguments")
-        lefthand = self.visit(node.values[0])
-        righthand = self.visit(node.values[1])
+            raise RuntimeError("Boolean op did not receive exactly 2 arguments")
+        lefthand = self.unpack(node.values[0])
+        righthand = self.unpack(node.values[1])
         f = self.visit(node.op)
         return f(lefthand,righthand)
-            #self.set_operands(self.visit(node.values[0]), self.visit(node.values[1]))
-            #return self.visit(node.op)
 
     def visit_And(self, node):
         """Returns a binary and function."""
@@ -279,7 +270,7 @@ class SourceVisitor(ast.NodeVisitor):
 
     def is_immutable(self, obj):
         """Returns whether an abject is immutable."""
-        return obj in self.immutables
+        return type(obj) in self.immutables
 
 
     def visit_For(self, node):
