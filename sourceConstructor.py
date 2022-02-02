@@ -1,7 +1,6 @@
 import ast
 import builtins
 
-
 class SourceVisitor(ast.NodeVisitor):
 
     def __init__(self):
@@ -12,7 +11,7 @@ class SourceVisitor(ast.NodeVisitor):
         self.immutables = {tuple,int,float,complex,str,bytes}
 
     def set_left_operand(self, left_operand):
-        if left_operand in self.source:
+        if left_operand in self.source: #werkt niet wanneer left_operand unhashable is (bijv. list)
             self.left_operand = self.source[left_operand]
         else:
             self.left_operand = left_operand
@@ -52,20 +51,20 @@ class SourceVisitor(ast.NodeVisitor):
     #To-do: De left en right operands staan in binOp, dus we kunnen daar beter checken 
     # welke op we moeten doen en die daar dan uitvoeren of met een functie afhandelen.
     def visit_Add(self, node):
-        """Adds the relevant left and right operands."""
-        return self.left_operand + self.right_operand
+        """Returns a binary addition function."""
+        return lambda a,b : a + b
 
     def visit_Sub(self, node):
-        """Subtracts the relevant left and right operands."""
-        return self.left_operand - self.right_operand
+        """Returns a binary subtraction function."""
+        return lambda a,b : a - b
 
     def visit_Mult(self, node):
-        """Multiplies the relevant left and right operands."""
-        return self.left_operand * self.right_operand
+        """Returns a binary multiplication function."""
+        return lambda a,b : a * b
 
     def visit_Div(self, node):
-        """Divides the relevant left and right operands."""
-        return self.left_operand / self.right_operand
+        """Returns a binary division function."""
+        return lambda a,b : a / b
 
     def visit_AugAssign(self, node):
         """
@@ -75,20 +74,32 @@ class SourceVisitor(ast.NodeVisitor):
                 target -- the targetted variable for the given augmented assignment operation
                 op     -- the operation the augmented assignment is to perform on the righthand side
                 value  -- the value that should be operated with the value of the target
-                """
-        self.set_operands(self.visit(node.target), self.visit(node.value))
-        if self.visit(node.target) in self.source:
-            self.source[self.visit(node.target)] = self.visit(node.op)
-            self.updateAll(self.visit(node.target))
-        elif isinstance(node.target, ast.Subscript):
-            self.source[self.visit(node.target.value)][self.visit(node.target.slice)] = self.visit(node.op)
-            self.updateAll(self.visit(node.target.value))
+        """
+        visitedTarget = self.visit(node.target)
+        visitedValue = self.visit(node.value)
+        f = self.visit(node.op)
+        if visitedTarget in self.source:
+            self.source[visitedTarget] = f(visitedTarget,visitedValue)
+            self.set_operands(self.visit(node.target), self.visit(node.value))
+        #if self.visit(node.target) in self.source:
+        #    self.source[self.visit(node.target)] = self.visit(node.op)
+        #    self.updateAll(self.visit(node.target))
+        #elif isinstance(node.target, ast.Subscript):
+        #    self.source[self.visit(node.target.value)][self.visit(node.target.slice)] = self.visit(node.op)
+        #    self.updateAll(self.visit(node.target.value))
         print(self.source)
 
     def visit_Subscript(self, node):
         """Returns the slice of a collection in source that corresponds to the slice contained within the given Subscript node."""
+        visitedValue = self.visit(node.value)
+        if isinstance(node.slice,ast.Name): #tijdelijke fix voor wanneer er een lijst wordt gemaakt, er klopt wel nog niet iets met dat visitedValue een str is.
+            return self.source[visitedValue][0:len(visitedValue)-1]
         return self.source[self.visit(node.value)][self.visit(node.slice)]
 
+    def visit_slice(self,node):
+        return range(node.lower,node.upper)
+
+    #Is deprecated volgens de docs
     def visit_Index(self, node):
         """Returns the value of a collection in source that corresponds to the value contained within the given Index node."""
         return self.source[self.visit(node.value)]
@@ -113,28 +124,28 @@ class SourceVisitor(ast.NodeVisitor):
             return self.visit(o)
 
     def visit_Eq(self, node):
-        """Returns a boolean indicating whether or not the lefthand operand equals the righthand operand."""
-        return self.left_operand == self.right_operand
+        """Returns a binary equality function."""
+        return lambda a,b : a == b
 
     def visit_NotEq(self, node):
-        """Returns a boolean indicating whether or not the lefthand operand does not equal the righthand operand."""
-        return self.left_operand != self.right_operand
+        """Returns a binary inequality function."""
+        return lambda a,b : a != b
 
     def visit_Lt(self, node):
-        """Returns a boolean indicating whether or not the lefthand operand is less than the righthand operand."""
-        return self.left_operand < self.right_operand
+        """Returns a binary less-than function."""
+        return lambda a,b : a < b
 
     def visit_LtE(self, node):
-        """Returns a boolean indicating whether or not the lefthand operand is less than or equal to the righthand operand."""
-        return self.left_operand <= self.right_operand
+        """Returns a binary less-than-or-equal-to function."""
+        return lambda a,b : a <= b
 
     def visit_Gt(self, node):
-        """Returns a boolean indicating whether or not the lefthand operand is greater than the righthand operand."""
-        return self.left_operand > self.right_operand
+        """Returns a binary greater-than function."""
+        return lambda a,b : a > b
 
     def visit_GtE(self, node):
-        """Returns a boolean indicating whether or not the lefthand operand is greater than or equal to the righthand operand."""
-        return self.left_operand >= self.right_operand
+        """Returns a binary greater-than-or-equal-to function."""
+        return lambda a,b : a >= b
 
     def visit_List(self, node):
         """
@@ -172,8 +183,13 @@ class SourceVisitor(ast.NodeVisitor):
 
     def visit_BinOp(self, node):
         """Visits the binary operation contained by the node."""
-        self.set_operands(self.visit(node.left), self.visit(node.right))
-        return self.visit(node.op)
+        lefthand = self.visit(node.left)
+        righthand = self.visit(node.right)
+        f = self.visit(node.op)
+        op = node.op
+        return f(lefthand,righthand)
+        #self.set_operands(self.visit(node.left), self.visit(node.right))
+        #return self.visit(node.op)
 
     def visit_If(self, node):
         """
@@ -193,17 +209,22 @@ class SourceVisitor(ast.NodeVisitor):
 
     def visit_BoolOp(self, node):
         """Visits the boolean operation contained within the node."""
-        if len(node.values) == 2:
-            self.set_operands(self.visit(node.values[0]), self.visit(node.values[1]))
-            return self.visit(node.op)
+        if len(node.values) != 2:
+            raise RuntimeError("Binary op did not receive exactly 2 arguments")
+        lefthand = self.visit(node.values[0])
+        righthand = self.visit(node.values[1])
+        f = self.visit(node.op)
+        return f(lefthand,righthand)
+            #self.set_operands(self.visit(node.values[0]), self.visit(node.values[1]))
+            #return self.visit(node.op)
 
     def visit_And(self, node):
-        """Returns left_operand and right_operand."""
-        return self.left_operand and self.right_operand
+        """Returns a binary and function."""
+        return lambda a,b : a and b
 
     def visit_Or(self, node):
-        """Returns left_operand or right_operand."""
-        return self.left_operand or self.right_operand
+        """Returns a binary or function."""
+        return lambda a,b : a or b
 
     def visit_While(self, node):
         """
@@ -382,7 +403,7 @@ def main(source):
 
 
 if __name__ == '__main__':
-    text = """1 + 2
+    text = """
 def test(a, b, l):
     a.append(1)
     b += 1
