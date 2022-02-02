@@ -1,6 +1,5 @@
 import ast
 import builtins
-from typing import Collection
 
 immutables = {tuple,int,float,complex,str,bytes}
 class SourceVisitor(ast.NodeVisitor):
@@ -38,14 +37,11 @@ class SourceVisitor(ast.NodeVisitor):
                 if not isinstance(node.value,ast.Tuple):
                     raise TypeError("Cannot unpack non-iterable %s object",str(type(node.value)))
                 visitedTarget = self.visit(target)
-                visitedValue = self.visit(node.value)
+                visitedValue = self.unpack(node.value)
                 if not len(visitedTarget) == len(visitedValue):
                     raise ValueError("Not enough values to unpack (expected %d, got %d)"%(len(visitedTarget),len(visitedValue)))
                 for i in range(len(visitedTarget)):
-                    if isinstance(visitedValue[i],Collection):
-                        self.source[visitedTarget[i]] = self.unpack(visitedValue[i])
-                    else:
-                        self.source[visitedTarget[i]] = visitedValue[i]
+                    self.source[visitedTarget[i]] = visitedValue[i]
             else:
                 self.source[self.visit(target)] = self.unpack(node.value)
             print(self.source)
@@ -434,8 +430,8 @@ def test(a, b, l):
         l.append(1)
     d = range(0, len(l))
     
-x,y = 1,2
 a = 2
+x,y,z = 1,[1,2],a
 b = 4
 ll = [1, 2, 3, 4]
 if (a * 2 >= 4) and (1 > a or b > 3):
