@@ -23,7 +23,7 @@ class SourceVisitor(ast.NodeVisitor):
         """Returns the name of the variable contained by the node."""
         return node.id
 
-    #Werkt dit voor bijv. "x,y = 1,2"?
+    #Dit werkt niet voor assignments voor meerdere variabelen, bijv. x,y = 1,2
     def visit_Assign(self, node):
         """
         Updates source such that the new state reflects the assignments made by the node.
@@ -34,10 +34,8 @@ class SourceVisitor(ast.NodeVisitor):
         """
         for target in node.targets:
             self.source[self.visit(target)] = self.unpack(node.value)
-            #self.updateAll(self.visit(target)) moet volgens mij niet, omdat we werken met references, niet values.
             print(self.source)
 
-    # welke op we moeten doen en die daar dan uitvoeren of met een functie afhandelen.
     def visit_Add(self, node):
         """Returns a binary addition function."""
         return lambda a,b : a + b
@@ -54,7 +52,6 @@ class SourceVisitor(ast.NodeVisitor):
         """Returns a binary division function."""
         return lambda a,b : a / b
 
-    #We moeten hier ook nog rekening houden met dat er lijsten met lijsten opgeteld kunnen worden.
     def visit_AugAssign(self, node):
         """
         Updates source such that the new state reflects the augmented assignment made by the node.
@@ -76,13 +73,7 @@ class SourceVisitor(ast.NodeVisitor):
                 indexName = node.target.slice.id
                 self.source[collectionName][self.source[indexName]] = f(self.source[collectionName][self.source[indexName]],unpackedValue)
             else:
-                raise NotImplementedError("Collection probably indexed with a slice.")
-        #if self.visit(node.target) in self.source:
-        #    self.source[self.visit(node.target)] = self.visit(node.op)
-        #    self.updateAll(self.visit(node.target))
-        #elif isinstance(node.target, ast.Subscript):
-        #    self.source[self.visit(node.target.value)][self.visit(node.target.slice)] = self.visit(node.op)
-        #    self.updateAll(self.visit(node.target.value))
+                raise NotImplementedError("Target collection probably indexed with a slice.")
         print(self.source)
 
     def visit_Subscript(self, node):
@@ -94,9 +85,9 @@ class SourceVisitor(ast.NodeVisitor):
     def visit_slice(self,node):
         """Returns a slice of indices for the given Slice node."""
         return range(node.lower,node.upper)
-        #of kan ook een slice values van de lijst zelf zijn, als ik het niet juist geïnterpreteerd heb zoals het er staat
+        #of kan ook een slice values van de lijst zelf zijn, als ik het niet juist geïnterpreteerd heb zoals het er staat,
+        # maar het lijkt wel juist te zijn.
 
-    #Is deprecated volgens de docs
     def visit_Index(self, node):
         """Returns the value of a collection in source that corresponds to the value contained within the given Index node."""
         return self.source[self.visit(node.value)]
@@ -192,7 +183,6 @@ class SourceVisitor(ast.NodeVisitor):
         f = self.visit(node.op)
         op = node.op
         return f(lefthand,righthand)
-        #return self.visit(node.op)
 
     def visit_If(self, node):
         """
@@ -314,7 +304,6 @@ class SourceVisitor(ast.NodeVisitor):
         """Visits the given Expression."""
         self.visit(node.value)
 
-    #Ook hier moeten we iets returnen als het laatste command van de functie een return call is.
     def visit_Builtin(self, node):
         """
         Visits the given built-in function.
@@ -327,7 +316,7 @@ class SourceVisitor(ast.NodeVisitor):
         for arg in node.args:
             arguments.append(self.unpack(arg))
         if isinstance(node.func, ast.Attribute):
-            getattr(self.source[self.visit(node.func.value)], node.func.attr)(*arguments)
+            return getattr(self.source[self.visit(node.func.value)], node.func.attr)(*arguments)
         if isinstance(node.func, ast.Name):
             return getattr(builtins, node.func.id)(*arguments)
 
@@ -368,19 +357,7 @@ class SourceVisitor(ast.NodeVisitor):
         """Checks if the given node is a function defined in source."""
         if not isinstance(self.source[f],list):
             return False
-        return isinstance(self.source[f][1],ast.Return) or isinstance(self.source[f][1],ast.Expr)   #Niet zeker of dit niet simpeler kan
-
-    #Moeten we dit wel doen als we alleen maar call-by-reference gebruiken voor collections (en evt. objects)?
-    #Volgens mij werkt deze methode trouwens niet voor nested function calls.
-    # self.referencepool gaat dan namelijk overschreven worden op elk nieuw niveau.
-    def updateAll(self, updated_reference):
-        """Updates all references to an updated value."""
-        updated_value = self.source[updated_reference]
-        for key in self.referencePool:
-            if updated_reference in self.referencePool[key]:
-                for reference in self.referencePool[key]:
-                    if reference is not updated_reference:  #Mogen we dit niet gewoon vervangen door de body van deze if-statement?
-                        self.source[reference] = updated_value
+        return isinstance(self.source[f][1],ast.Return) or isinstance(self.source[f][1],ast.Expr)   #Niet zeker of dit niet simpeler kan, of zelfs of dit volledig juist is.
 
     def makeReferencePool(self,node):
         """
