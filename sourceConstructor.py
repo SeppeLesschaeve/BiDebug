@@ -265,7 +265,9 @@ class SourceVisitor(ast.NodeVisitor):
                 if isinstance(argument, ast.arg):
                     arguments.append(argument.arg)
         self.source[node.name].append(arguments)
-        self.source[node.name].append(node.body[0])
+        self.source[node.name].append([])
+        for i in range(len(node.body)):
+            self.source[node.name][1].append(node.body[i])
         print(self.source)
 
     def visit_Call(self, node):
@@ -282,7 +284,8 @@ class SourceVisitor(ast.NodeVisitor):
         self.makeReferencePool(node)
         ts = self.buildTempSource(node)
         funcenv = SourceVisitor(ts)
-        funcenv.visit(ts[node.func.id][1])
+        for statement in ts[node.func.id][1]:
+            funcenv.visit(statement)
         for key in self.referencePool:
             self.source[self.referencePool[key]] = funcenv.source[key]
         return funcenv.returnValue
@@ -334,7 +337,7 @@ class SourceVisitor(ast.NodeVisitor):
         arguments = []
         for arg in node.args:
             arguments.append(self.unpack(arg))
-        if isinstance(node.func, ast.Attribute):
+        if isinstance(node.func, ast.Attribute):    #Dit valt voor wannneer de functie opgeroepen wordt op een object
             return getattr(self.source[self.visit(node.func.value)], node.func.attr)(*arguments)
         if isinstance(node.func, ast.Name):
             return getattr(builtins, node.func.id)(*arguments)
@@ -376,7 +379,9 @@ class SourceVisitor(ast.NodeVisitor):
         """Checks if the given node is a function defined in source."""
         if not isinstance(self.source[f],list):
             return False
-        return isinstance(self.source[f][1],ast.Return) or isinstance(self.source[f][1],ast.Expr)   #Niet zeker of dit niet simpeler kan, of zelfs of dit volledig juist is.
+        if not isinstance(self.source[f][1],list):
+            return False
+        return isinstance(self.source[f][1][0],ast.Expr)   #Niet zeker of dit niet simpeler kan, of zelfs of dit volledig juist is.
 
     def makeReferencePool(self,node):
         """
@@ -458,6 +463,6 @@ else:
 a = 4
 b += a
 test(ll, l = ll, b = 1)
-print(a,b,c,i,ll)
+print(a,b,c,x,y,z,i,ll)
 """
     main(text)
