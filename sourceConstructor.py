@@ -318,7 +318,6 @@ class SourceVisitor(ast.NodeVisitor):
                 self.source[node.target.id] = j
                 for n in node.body:
                     self.visit(n)
-        self.source.pop(node.target.id)
 
     def visit_Expr(self, node):
         """Visits the given Expression."""
@@ -459,6 +458,6 @@ else:
 a = 4
 b += a
 test(ll, l = ll, b = 1)
-print(a,b,c,ll)
+print(a,b,c,i,ll)
 """
     main(text)
