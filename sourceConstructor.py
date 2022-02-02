@@ -1,5 +1,6 @@
 import ast
 import builtins
+import copy
 
 immutables = {tuple,int,float,complex,str,bytes}
 class SourceVisitor(ast.NodeVisitor):
@@ -53,6 +54,7 @@ class SourceVisitor(ast.NodeVisitor):
         """Returns a binary division function."""
         return lambda a,b : a / b
 
+    #We moeten hier ook nog rekening houden met dat er lijsten met lijsten opgeteld kunnen worden.
     def visit_AugAssign(self, node):
         """
         Updates source such that the new state reflects the augmented assignment made by the node.
@@ -62,11 +64,19 @@ class SourceVisitor(ast.NodeVisitor):
                 op     -- the operation the augmented assignment is to perform on the righthand side
                 value  -- the value that should be operated with the value of the target
         """
-        visitedTarget = self.visit(node.target)
-        unpackedValue = self.unpack(node.value)
         f = self.visit(node.op)
-        if visitedTarget in self.source:
-            self.source[visitedTarget] = f(self.source[visitedTarget],unpackedValue)
+        unpackedValue = self.unpack(node.value)
+        if isinstance(node.target,ast.Name):
+            visitedTarget = self.visit(node.target)
+            if visitedTarget in self.source:
+                self.source[visitedTarget] = f(self.source[visitedTarget],unpackedValue)
+        elif isinstance(node.target,ast.Subscript):
+            collectionName = self.visit(node.target.value)
+            if isinstance(node.target.slice,ast.Name):
+                indexName = node.target.slice.id
+                self.source[collectionName][self.source[indexName]] = f(self.source[collectionName][self.source[indexName]],unpackedValue)
+            else:
+                raise NotImplementedError("Collection probably indexed with a slice.")
         #if self.visit(node.target) in self.source:
         #    self.source[self.visit(node.target)] = self.visit(node.op)
         #    self.updateAll(self.visit(node.target))
@@ -248,7 +258,6 @@ class SourceVisitor(ast.NodeVisitor):
         self.source[node.name].append(node.body[0])
         print(self.source)
 
-    #Hier gaan we nog iets moeten returnen als het laatste argument een return command is.
     def visit_Call(self, node):
         """
         Visits a call to a given function.
@@ -277,6 +286,7 @@ class SourceVisitor(ast.NodeVisitor):
     def visit_Return(self, node):
         self.returnValue = self.visit(node.value)
 
+    #The iterator must be a deep copy of the associated element of the list.
     def visit_For(self, node):
         """
         Visits the relevant body for all elements in the collection over which the for loop iterates.
@@ -288,12 +298,11 @@ class SourceVisitor(ast.NodeVisitor):
         """
         if isinstance(node.iter, ast.Name):
             listLabel = self.visit(node.iter)
-            for i in range(0, len(self.source[listLabel])):
-                temp = self.source[listLabel][i]
-                self.source[self.visit(node.target)] = temp
+            for element in self.source[listLabel]:
+                self.source[self.visit(node.target)] = element
                 for n in node.body:
                     self.visit(n)
-                    self.source[listLabel][i] = self.source[self.visit(node.target)]
+                    element = self.source[self.visit(node.target)]
         if isinstance(node.iter, ast.Call):
             for j in self.visit(node.iter):
                 self.source[node.target.id] = j
@@ -326,7 +335,6 @@ class SourceVisitor(ast.NodeVisitor):
         if isinstance(node.func, ast.Name):
             return getattr(builtins, node.func.id)(*arguments)
 
-    #We moeten hier ook nog function definitions en zo aan de temporary source toevoegen.
     def buildTempSource(self, node):
         """
         Builds and returns a temporary source from our current source that encompasses only those entries that the node would need to see.
@@ -386,6 +394,12 @@ class SourceVisitor(ast.NodeVisitor):
         for arg in node.keywords:
             references[arg.arg] = self.visit(arg.value)
         self.referencePool = references
+
+    def isBuiltin(self, node):
+        """Returns a boolean indicating whether a function is a built-in."""
+        return isinstance(node.func, ast.Attribute) \
+               or (isinstance(node.func, ast.Name) and node.func.id not in self.source)
+
 
 def main(source):
     tree = ast.parse(source)
