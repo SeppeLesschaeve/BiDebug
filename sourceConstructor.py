@@ -1,5 +1,6 @@
 import ast
 import builtins
+from typing import Collection
 
 immutables = {tuple,int,float,complex,str,bytes}
 class SourceVisitor(ast.NodeVisitor):
@@ -33,7 +34,20 @@ class SourceVisitor(ast.NodeVisitor):
                 value   -- a value that must be assigned to the given targets
         """
         for target in node.targets:
-            self.source[self.visit(target)] = self.unpack(node.value)
+            if isinstance(target,ast.Tuple):
+                if not isinstance(node.value,ast.Tuple):
+                    raise TypeError("Cannot unpack non-iterable %s object",str(type(node.value)))
+                visitedTarget = self.visit(target)
+                visitedValue = self.visit(node.value)
+                if not len(visitedTarget) == len(visitedValue):
+                    raise ValueError("Not enough values to unpack (expected %d, got %d)"%(len(visitedTarget),len(visitedValue)))
+                for i in range(len(visitedTarget)):
+                    if isinstance(visitedValue[i],Collection):
+                        self.source[visitedTarget[i]] = self.unpack(visitedValue[i])
+                    else:
+                        self.source[visitedTarget[i]] = visitedValue[i]
+            else:
+                self.source[self.visit(target)] = self.unpack(node.value)
             print(self.source)
 
     def visit_Add(self, node):
@@ -155,6 +169,16 @@ class SourceVisitor(ast.NodeVisitor):
         for element in node.elts:
             elements.append(self.visit(element))
         return elements
+
+    def visit_Tuple(self, node):
+        l = []
+        if isinstance(node.ctx,ast.Store):
+            for el in node.elts:
+                l.append(self.visit(el))
+            return tuple(l)
+        for el in node.elts:
+            l.append(self.unpack(el))
+        return tuple(l)
 
     def visit_In(self, node):
         """Returns a binary in operation."""
@@ -410,7 +434,7 @@ def test(a, b, l):
         l.append(1)
     d = range(0, len(l))
     
-    
+x,y = 1,2
 a = 2
 b = 4
 ll = [1, 2, 3, 4]
