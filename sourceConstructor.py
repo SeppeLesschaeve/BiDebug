@@ -44,7 +44,7 @@ class SourceVisitor(ast.NodeVisitor):
                     self.source[visitedTarget[i]] = visitedValue[i]
             else:
                 self.source[self.visit(target)] = self.unpack(node.value)
-            print(self.source)
+            self.printSource(self.source)
 
     def visit_Add(self, node):
         """Returns a binary addition function."""
@@ -84,7 +84,7 @@ class SourceVisitor(ast.NodeVisitor):
                 self.source[collectionName][self.source[indexName]] = f(self.source[collectionName][self.source[indexName]],unpackedValue)
             else:
                 raise NotImplementedError("Target collection probably indexed with a slice.")
-        print(self.source)
+        self.printSource(self.source)
 
     def visit_Subscript(self, node):
         """Returns the slice of a collection in source that corresponds to the slice contained within the given Subscript node."""
@@ -248,6 +248,8 @@ class SourceVisitor(ast.NodeVisitor):
         while self.visit(node.test):
             for n in node.body:
                 self.visit(n)
+            for n in node.orelse:
+                self.visit(n)
 
     def visit_FunctionDef(self, node):
         """
@@ -268,7 +270,7 @@ class SourceVisitor(ast.NodeVisitor):
         self.source[node.name].append([])
         for i in range(len(node.body)):
             self.source[node.name][1].append(node.body[i])
-        print(self.source)
+        self.printSource(self.source)
 
     def visit_Call(self, node):
         """
@@ -321,6 +323,8 @@ class SourceVisitor(ast.NodeVisitor):
                 self.source[node.target.id] = j
                 for n in node.body:
                     self.visit(n)
+        for n in node.orelse:
+            self.visit(n)
 
     def visit_Expr(self, node):
         """Visits the given Expression."""
@@ -412,6 +416,14 @@ class SourceVisitor(ast.NodeVisitor):
         return isinstance(node.func, ast.Attribute) \
                or (isinstance(node.func, ast.Name) and node.func.id not in self.source)
 
+    def printSource(self,source):
+        pSource = {}
+        for entry in source:
+            if self.isFunction(entry):
+                pSource[entry] = (len(self.source[entry][0]),len(self.source[entry][1]))
+            else:
+                pSource[entry] = self.source[entry]
+        print(pSource)
 
 def main(source):
     tree = ast.parse(source)
