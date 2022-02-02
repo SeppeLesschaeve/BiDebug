@@ -283,6 +283,7 @@ class SourceVisitor(ast.NodeVisitor):
         """
         if self.isBuiltin(node):
             return self.visit_Builtin(node)
+        print("function call: %s"%(node.func.id))
         self.makeReferencePool(node)
         ts = self.buildTempSource(node)
         funcenv = SourceVisitor(ts)
@@ -290,6 +291,7 @@ class SourceVisitor(ast.NodeVisitor):
             funcenv.visit(statement)
         for key in self.referencePool:
             self.source[self.referencePool[key]] = funcenv.source[key]
+        print("return from: %s"%(node.func.id))
         return funcenv.returnValue
         
 
