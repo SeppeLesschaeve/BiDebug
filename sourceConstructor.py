@@ -260,12 +260,13 @@ class SourceVisitor(ast.NodeVisitor):
         """
         if self.isBuiltin(node):
             return self.visit_Builtin(node)
-        self.updateReferencePoolFromCall(node)
+        self.makeReferencePool(node)
+        #self.updateReferencePoolFromCall(node)
         ts = self.buildTempSource(node)
         funcenv = SourceVisitor(ts)
         funcenv.visit(ts[node.func.id][1])
         for key in self.referencePool:
-            self.source[key] = funcenv.source[key]
+            self.source[self.referencePool[key]] = funcenv.source[key]
         return funcenv.returnValue
         
 
@@ -360,7 +361,7 @@ class SourceVisitor(ast.NodeVisitor):
     def isFunction(self,f):
         if not isinstance(self.source[f],list):
             return False
-        return isinstance(self.source[f][1],ast.Return) #Weet niet of dit ook zo is als function niks returnt.
+        return isinstance(self.source[f][1],ast.Return) or isinstance(self.source[f][1],ast.Expr)   #Niet zeker of dit niet simpeler kan
 
     #Moeten we dit wel doen als we alleen maar call-by-reference gebruiken voor collections (en evt. objects)?
     #Volgens mij werkt deze methode trouwens niet voor nested function calls.
@@ -374,31 +375,17 @@ class SourceVisitor(ast.NodeVisitor):
                     if reference is not updated_reference:  #Mogen we dit niet gewoon vervangen door de body van deze if-statement?
                         self.source[reference] = updated_value
 
-    def updateReferencePoolFromCall(self, node):
-        """Updates the reference dict with all mutable arguments to the given Call node before evaluating the function."""
+    def makeReferencePool(self,node):
         references = {}
-        if isinstance(node.args, list):
-            for i in range(0, len(node.args)):
-                tempArg = self.visit(node.args[i])
-                if tempArg in self.source and not self.is_immutable(self.source[tempArg]):
-                    if tempArg not in references:
-                        references[tempArg] = [self.source[node.func.id][0][i]]
-                    else:
-                        references[tempArg].append(self.source[node.func.id][0][i])
-        for j in range(0, len(node.keywords)):
-            tempArg = self.visit(node.keywords[j].value)
-            if tempArg in self.source and not self.is_immutable(self.source[tempArg]):
-                if tempArg not in references:
-                    references[tempArg] = [node.keywords[j].arg]
-                else:
-                    references[tempArg].append(node.keywords[j].arg)
+        if not isinstance(node.args,list):
+            raise RuntimeError("Incorrect function call: arguments are not in a list.")
+        for i,arg in enumerate(node.args):
+            visitedArg = self.visit(arg)
+            if visitedArg in self.source and not self.is_immutable(self.source[visitedArg]):
+                references[self.source[node.func.id][0][i]] = visitedArg
+        for arg in node.keywords:
+            references[arg.arg] = self.visit(arg.value)
         self.referencePool = references
-
-    def isBuiltin(self, node):
-        """Returns a boolean indicating whether a function is a built-in."""
-        return isinstance(node.func, ast.Attribute) \
-               or (isinstance(node.func, ast.Name) and node.func.id not in self.source)
-
 
 def main(source):
     tree = ast.parse(source)
@@ -410,23 +397,46 @@ def main(source):
 
 if __name__ == '__main__':
     text = """
-def f1(a,b):
-    return a + b + 1
-
-a = 1
-b = 2
-c = f1(a,b)
-while c > 0:
-    c -= 1
-l = [1,2,3]
-s = 0
-p = 1
-for e in l:
-    s += e
-    p *= e
-l += [4]
-if a == 2 or a == 1:
-    print(\"hehe\")
-
+def test(a, b, l):
+    a.append(1)
+    b += 1
+    c = 1 + b 
+    l.append(c)
+    l.pop()
+    l.sort()
+    if 1 in l:
+        l.append(1)
+    d = range(0, len(l))
+    
+    
+a = 2
+b = 4
+ll = [1, 2, 3, 4]
+if (a * 2 >= 4) and (1 > a or b > 3):
+    c = 2
+    while c > 0:
+        c -= 1
+else:
+    for i in range(0, len(ll)):
+        ll[i] *= ll[i]
+    for i in ll:
+        i /= i
+    else:
+        b += 1
+if (a * 2 >= 4) and (1 > a or b > 3):
+    for i in range(0, len(ll)):
+        ll[i] *= ll[i]
+    for i in ll:
+        i = 2
+    else:
+        b += 1
+else:
+    c = 2
+    while c > 0:
+        c -= 1
+a = 4
+b += a
+test(ll, l = ll, b = 1)
+print(a,b,c,i,ll)
 """
     main(text)
