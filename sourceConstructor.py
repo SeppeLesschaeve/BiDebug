@@ -1,12 +1,13 @@
 import ast
 import builtins
 
+immutables = {tuple,int,float,complex,str,bytes}
 class SourceVisitor(ast.NodeVisitor):
 
-    def __init__(self):
-        self.source = {}
+    def __init__(self,source={}):
+        self.source = source
         self.referencePool = {}
-        self.immutables = {tuple,int,float,complex,str,bytes}
+        self.returnValue = None
 
     def unpack(self,v):
         if isinstance(v,ast.Name):
@@ -31,7 +32,6 @@ class SourceVisitor(ast.NodeVisitor):
                 value   -- a value that must be assigned to the given targets
         """
         for target in node.targets:
-            print(self.unpack(node.value))
             self.source[self.visit(target)] = self.unpack(node.value)
             #self.updateAll(self.visit(target)) moet volgens mij niet, omdat we werken met references, niet values.
             print(self.source)
@@ -245,7 +245,7 @@ class SourceVisitor(ast.NodeVisitor):
                 if isinstance(argument, ast.arg):
                     arguments.append(argument.arg)
         self.source[node.name].append(arguments)
-        self.source[node.name].append(node.body)
+        self.source[node.name].append(node.body[0])
 
     #Hier gaan we nog iets moeten returnen als het laatste argument een return command is.
     def visit_Call(self, node):
@@ -259,19 +259,21 @@ class SourceVisitor(ast.NodeVisitor):
         """
         if self.isBuiltin(node):
             return self.visit_Builtin(node)
-        ts = self.source
         self.updateReferencePoolFromCall(node)
-        self.source = self.buildTempSource(node)
-        for statement in ts[node.func.id][1]:
-            self.visit(statement)
+        ts = self.buildTempSource(node)
+        funcenv = SourceVisitor(ts)
+        funcenv.visit(ts[node.func.id][1])
         for key in self.referencePool:
-            ts[key] = self.source[self.referencePool[key][0]]
-        self.source = ts
+            self.source[key] = funcenv.source[key]
+        return funcenv.returnValue
+        
 
     def is_immutable(self, obj):
         """Returns whether an abject is immutable."""
-        return type(obj) in self.immutables
+        return type(obj) in immutables
 
+    def visit_Return(self, node):
+        self.returnValue = self.visit(node.value)
 
     def visit_For(self, node):
         """
@@ -333,19 +335,31 @@ class SourceVisitor(ast.NodeVisitor):
                 args -- the arguments to the function
         """
         tempSource = {}
+        argnames = self.source[node.func.id][0]
         if isinstance(node.args, list):
             for i in range(0, len(node.args)):
                 visitedArg = self.visit(node.args[i])
                 if visitedArg in self.source:
-                    tempSource[self.source[node.func.id][0][i]] = self.source[visitedArg]
+                    tempSource[argnames[i]] = self.source[visitedArg]
                 else:
-                    tempSource[self.source[node.func.id][0][i]] = visitedArg
+                    tempSource[argnames[i]] = visitedArg
         for j in range(0, len(node.keywords)):
             if self.visit(node.keywords[j].value) in self.source:
                 tempSource[node.keywords[j].arg] = self.source[self.visit(node.keywords[j].value)]
             else:
                 tempSource[node.keywords[j].arg] = self.visit(node.keywords[j].value)
+        self.addAllFunctions(tempSource)
         return tempSource
+
+    def addAllFunctions(self,tempSource):
+        for f in self.source:
+            if self.isFunction(f):
+                tempSource[f] = self.source[f]
+    
+    def isFunction(self,f):
+        if not isinstance(self.source[f],list):
+            return False
+        return isinstance(self.source[f][1],ast.Return) #Weet niet of dit ook zo is als function niks returnt.
 
     #Moeten we dit wel doen als we alleen maar call-by-reference gebruiken voor collections (en evt. objects)?
     #Volgens mij werkt deze methode trouwens niet voor nested function calls.
@@ -387,52 +401,31 @@ class SourceVisitor(ast.NodeVisitor):
 
 def main(source):
     tree = ast.parse(source)
-    print(ast.dump(tree))
+    #print(ast.dump(tree))
     usage_analyzer = SourceVisitor()
     usage_analyzer.visit(tree)
-    print(usage_analyzer.source)
+    #print(usage_analyzer.source)
 
 
 if __name__ == '__main__':
     text = """
-def test(a, b, l):
-    a.append(1)
-    b += 1
-    c = 1 + b 
-    l.append(c)
-    l.pop()
-    l.sort()
-    if 1 in l:
-        l.append(1)
-    d = range(0, len(l))
-    
-    
-a = 2
-b = 4
-ll = [1, 2, 3, 4]
-if (a * 2 >= 4) and (1 > a or b > 3):
-    c = 2
-    while c > 0:
-        c -= 1
-else:
-    for i in range(0, len(ll)):
-        ll[i] *= ll[i]
-    for i in ll:
-        i /= i
-    else:
-        b += 1
-if (a * 2 >= 4) and (1 > a or b > 3):
-    for i in range(0, len(ll)):
-        ll[i] *= ll[i]
-    for i in ll:
-        i = 2
-    else:
-        b += 1
-else:
-    c = 2
-    while c > 0:
-        c -= 1
-a = 4
-b += a
-test(ll, l = ll, b = 1)"""
+def f1(a,b):
+    return a + b + 1
+
+a = 1
+b = 2
+c = f1(a,b)
+while c > 0:
+    c -= 1
+l = [1,2,3]
+s = 0
+p = 1
+for e in l:
+    s += e
+    p *= e
+l += [4]
+if a == 2 or a == 1:
+    print(\"hehe\")
+
+"""
     main(text)
