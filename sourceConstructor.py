@@ -35,7 +35,7 @@ class SourceVisitor(ast.NodeVisitor):
         for target in node.targets:
             if isinstance(target,ast.Tuple):
                 if not isinstance(node.value,ast.Tuple):
-                    raise TypeError("Cannot unpack non-iterable %s object",str(type(node.value)))
+                    raise TypeError("Cannot unpack non-iterable %s object"%str(type(node.value)))
                 visitedTarget = self.visit(target)
                 visitedValue = self.unpack(node.value)
                 if not len(visitedTarget) == len(visitedValue):
@@ -343,7 +343,7 @@ class SourceVisitor(ast.NodeVisitor):
         arguments = []
         for arg in node.args:
             arguments.append(self.unpack(arg))
-        if isinstance(node.func, ast.Attribute):    #Dit valt voor wannneer de functie opgeroepen wordt op een object
+        if isinstance(node.func, ast.Attribute):    #Dit valt voor wanneer de functie opgeroepen wordt op een object
             return getattr(self.source[self.visit(node.func.value)], node.func.attr)(*arguments)
         if isinstance(node.func, ast.Name):
             return getattr(builtins, node.func.id)(*arguments)
