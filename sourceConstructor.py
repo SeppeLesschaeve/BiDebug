@@ -8,6 +8,18 @@ class SourceVisitor(ast.NodeVisitor):
     funcs = {}
     globals = {}
 
+    """Class functions"""
+    def constant(s):
+        try:
+            return int(s)
+        except ValueError:
+            return None
+    def getIfList(s):
+        try:
+            return [int(i) for i in s[1:-1].split(",")]
+        except BaseException:
+            return None
+
     def __init__(self,source={}):
         self.source = source
         self.referencePool = {}
@@ -16,7 +28,10 @@ class SourceVisitor(ast.NodeVisitor):
     def unpack(self,v):
         """Unpacks a variable such that the return value is its actual value, not its name."""
         if isinstance(v,ast.Name):
-            return self.source[self.visit(v)]
+            if v.id in self.source:
+                return self.source[self.visit(v)]
+            elif v.id in SourceVisitor.globals:
+                return SourceVisitor.globals[self.visit(v)]
         return self.visit(v)
 
     def visit_Constant(self, node):
@@ -59,7 +74,8 @@ class SourceVisitor(ast.NodeVisitor):
             else:
                 if visitedTarget in SourceVisitor.globals and visitedTarget not in self.source:
                     SourceVisitor.globals[visitedTarget] = self.unpack(node.value)
-                self.source[self.visit(target)] = self.unpack(node.value)
+                else:
+                    self.source[self.visit(target)] = self.unpack(node.value)
             self.printSource()
 
     def visit_Add(self, node):
@@ -93,11 +109,24 @@ class SourceVisitor(ast.NodeVisitor):
             visitedTarget = self.visit(node.target)
             if visitedTarget in self.source:
                 self.source[visitedTarget] = f(self.source[visitedTarget],unpackedValue)
+            elif visitedTarget in SourceVisitor.globals:
+                SourceVisitor.globals[visitedTarget] = f(SourceVisitor.globals[visitedTarget],unpackedValue)
         elif isinstance(node.target,ast.Subscript):
             collectionName = self.visit(node.target.value)
             if isinstance(node.target.slice,ast.Name):
                 indexName = node.target.slice.id
-                self.source[collectionName][self.source[indexName]] = f(self.source[collectionName][self.source[indexName]],unpackedValue)
+                index = None
+                if indexName in self.source or (index := SourceVisitor.constant(indexName)) or (index := SourceVisitor.getIfList(indexName)):
+                    if not index:
+                        index = self.source[indexName]
+                elif indexName in SourceVisitor.globals:
+                    index = SourceVisitor.globals[indexName]
+                else:
+                    raise ValueError("Index Undefined")
+                if collectionName in self.source:
+                    self.source[collectionName][index] = f(self.source[collectionName][index],unpackedValue)
+                elif collectionName in SourceVisitor.globals:
+                    SourceVisitor.globals[collectionName][index] = f(self.source[collectionName][index],unpackedValue)
             else:
                 raise NotImplementedError("Target collection probably indexed with a slice.")
         self.printSource()
@@ -362,7 +391,10 @@ class SourceVisitor(ast.NodeVisitor):
         for arg in node.args:
             arguments.append(self.unpack(arg))
         if isinstance(node.func, ast.Attribute):    #Dit valt voor wanneer de functie opgeroepen wordt op een object
-            return getattr(self.source[self.visit(node.func.value)], node.func.attr)(*arguments)
+            if node.func.value.id in self.source:
+                return getattr(self.source[self.visit(node.func.value)], node.func.attr)(*arguments)
+            elif node.func.value.id in SourceVisitor.globals:
+                return getattr(SourceVisitor.globals[node.func.value.id], node.func.attr)(*arguments)
         if isinstance(node.func, ast.Name):
             return getattr(builtins, node.func.id)(*arguments)
 
@@ -460,6 +492,7 @@ def main(source):
 if __name__ == '__main__':
     text = """
 global g
+global gl
 def test(a, b, l):
     a.append(1)
     b += 1
@@ -471,10 +504,12 @@ def test(a, b, l):
     if 1 in l:
         l.append(1)
     d = range(0, len(l))
+    gl.append(4)
     
 a = 2
 x,y,z = 1,[1,2],a
 b = 4
+gl = [1,2]
 ll = [1, 2, 3, 4]
 if (a * 2 >= 4) and (1 > a or b > 3):
     c = 2
@@ -499,10 +534,12 @@ else:
     while c > 0:
         c -= 1
 a = 4
+gl.append(3)
+print("passed")
 b += a
 test(ll, l = ll, b = 1)
 a += b
 g = 5
-print(a,b,c,x,y,z,i,ll)
+print(a,b,c,x,y,z,i,ll,gl)
 """
     main(text)
