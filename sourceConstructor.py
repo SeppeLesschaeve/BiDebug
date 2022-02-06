@@ -6,6 +6,7 @@ class SourceVisitor(ast.NodeVisitor):
 
     """Class variables"""
     funcs = {}
+    globals = {}
 
     def __init__(self,source={}):
         self.source = source
@@ -25,6 +26,13 @@ class SourceVisitor(ast.NodeVisitor):
     def visit_Name(self, node):
         """Returns the name of the variable contained by the node."""
         return node.id
+    
+    class Undefined:
+        def __init__(self):
+            pass
+    def visit_Global(self, node):
+        for name in node.names:
+            SourceVisitor.globals[name] = SourceVisitor.Undefined()
 
     #Dit werkt niet voor assignments voor meerdere variabelen, bijv. x,y = 1,2
     def visit_Assign(self, node):
@@ -36,16 +44,21 @@ class SourceVisitor(ast.NodeVisitor):
                 value   -- a value that must be assigned to the given targets
         """
         for target in node.targets:
+            visitedTarget = self.visit(target)
             if isinstance(target,ast.Tuple):
                 if not isinstance(node.value,ast.Tuple):
                     raise TypeError("Cannot unpack non-iterable %s object"%str(type(node.value)))
-                visitedTarget = self.visit(target)
                 visitedValue = self.unpack(node.value)
                 if not len(visitedTarget) == len(visitedValue):
                     raise ValueError("Not enough values to unpack (expected %d, got %d)"%(len(visitedTarget),len(visitedValue)))
                 for i in range(len(visitedTarget)):
+                    if visitedTarget[i] not in self.source and visitedTarget[i] in SourceVisitor.globals:
+                        SourceVisitor.globals[visitedTarget[i]] = visitedValue[i]
+                        continue
                     self.source[visitedTarget[i]] = visitedValue[i]
             else:
+                if visitedTarget in SourceVisitor.globals and visitedTarget not in self.source:
+                    SourceVisitor.globals[visitedTarget] = self.unpack(node.value)
                 self.source[self.visit(target)] = self.unpack(node.value)
             self.printSource()
 
@@ -426,10 +439,12 @@ class SourceVisitor(ast.NodeVisitor):
     def printSource(self):
         pSource = {}
         for entry in self.source:
-            if self.isFunction(entry):
-                pSource[entry] = (len(self.source[entry][0]),len(self.source[entry][1]))
-            else:
-                pSource[entry] = self.source[entry]
+            pSource[entry] = self.source[entry]
+        for entry in SourceVisitor.globals:
+            if isinstance(SourceVisitor.globals[entry],SourceVisitor.Undefined):
+                pSource[entry] = "Undefined"
+                continue
+            pSource[entry] = SourceVisitor.globals[entry]
         for f in SourceVisitor.funcs:
             pSource[f] = (len(SourceVisitor.funcs[f][0]),len(SourceVisitor.funcs[f][1]))
         print(pSource)
@@ -444,12 +459,14 @@ def main(source):
 
 if __name__ == '__main__':
     text = """
+global g
 def test(a, b, l):
     a.append(1)
     b += 1
     c = 1 + b 
     l.append(c)
     l.pop()
+    g = 3
     l.sort()
     if 1 in l:
         l.append(1)
@@ -484,6 +501,8 @@ else:
 a = 4
 b += a
 test(ll, l = ll, b = 1)
+a += b
+g = 5
 print(a,b,c,x,y,z,i,ll)
 """
     main(text)
