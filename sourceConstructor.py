@@ -4,12 +4,13 @@ import builtins
 immutables = {tuple,int,float,complex,str,bytes}
 class SourceVisitor(ast.NodeVisitor):
 
+    """Class variables"""
+    funcs = {}
+
     def __init__(self,source={}):
         self.source = source
         self.referencePool = {}
         self.returnValue = None
-        if not globals().get("functions",None):
-            globals()["functions"] = {}
 
     def unpack(self,v):
         """Unpacks a variable such that the return value is its actual value, not its name."""
@@ -46,7 +47,7 @@ class SourceVisitor(ast.NodeVisitor):
                     self.source[visitedTarget[i]] = visitedValue[i]
             else:
                 self.source[self.visit(target)] = self.unpack(node.value)
-            self.printSource(self.source)
+            self.printSource()
 
     def visit_Add(self, node):
         """Returns a binary addition function."""
@@ -86,7 +87,7 @@ class SourceVisitor(ast.NodeVisitor):
                 self.source[collectionName][self.source[indexName]] = f(self.source[collectionName][self.source[indexName]],unpackedValue)
             else:
                 raise NotImplementedError("Target collection probably indexed with a slice.")
-        self.printSource(self.source)
+        self.printSource()
 
     def visit_Subscript(self, node):
         """Returns the slice of a collection in source that corresponds to the slice contained within the given Subscript node."""
@@ -262,8 +263,8 @@ class SourceVisitor(ast.NodeVisitor):
                 args -- an object containing a collection of arguments, containing:
                     args -- a collection of arguments for the function that is to be defined
         """
-        globals()["functions"][node.name] = []
-        funcn = globals()["functions"][node.name]
+        SourceVisitor.funcs[node.name] = []
+        funcn = SourceVisitor.funcs[node.name]
         arguments = []
         if isinstance(node.args.args, list):
             for argument in node.args.args:
@@ -273,7 +274,7 @@ class SourceVisitor(ast.NodeVisitor):
         funcn.append([])
         for i in range(len(node.body)):
             funcn[1].append(node.body[i])
-        self.printSource(self.source)
+        self.printSource()
         print(funcn)
 
     def visit_Call(self, node):
@@ -291,7 +292,7 @@ class SourceVisitor(ast.NodeVisitor):
         self.makeReferencePool(node)
         ts = self.buildTempSource(node)
         funcenv = SourceVisitor(ts)
-        for statement in globals()["functions"][node.func.id][1]:
+        for statement in SourceVisitor.funcs[node.func.id][1]:
             funcenv.visit(statement)
         for key in self.referencePool:
             self.source[self.referencePool[key]] = funcenv.source[key]
@@ -363,7 +364,7 @@ class SourceVisitor(ast.NodeVisitor):
                 args -- the arguments to the function
         """
         tempSource = {}
-        argnames = globals()["functions"][node.func.id][0]
+        argnames = SourceVisitor.funcs[node.func.id][0]
         if isinstance(node.args, list):
             for i in range(0, len(node.args)):
                 visitedArg = self.visit(node.args[i])
@@ -412,7 +413,7 @@ class SourceVisitor(ast.NodeVisitor):
         for i,arg in enumerate(node.args):
             visitedArg = self.visit(arg)
             if visitedArg in self.source and not self.is_immutable(self.source[visitedArg]):
-                references[globals()["functions"][node.func.id][0][i]] = visitedArg
+                references[SourceVisitor.funcs[node.func.id][0][i]] = visitedArg
         for arg in node.keywords:
             references[arg.arg] = self.visit(arg.value)
         self.referencePool = references
@@ -420,15 +421,17 @@ class SourceVisitor(ast.NodeVisitor):
     def isBuiltin(self, node):
         """Returns a boolean indicating whether a function is a built-in."""
         return isinstance(node.func, ast.Attribute) \
-               or (isinstance(node.func, ast.Name) and not globals()["functions"].get(node.func.id,False))
+               or (isinstance(node.func, ast.Name) and not SourceVisitor.funcs.get(node.func.id,False))
 
-    def printSource(self,source):
+    def printSource(self):
         pSource = {}
-        for entry in source:
+        for entry in self.source:
             if self.isFunction(entry):
                 pSource[entry] = (len(self.source[entry][0]),len(self.source[entry][1]))
             else:
                 pSource[entry] = self.source[entry]
+        for f in SourceVisitor.funcs:
+            pSource[f] = (len(SourceVisitor.funcs[f][0]),len(SourceVisitor.funcs[f][1]))
         print(pSource)
 
 def main(source):
