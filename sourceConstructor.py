@@ -1,5 +1,4 @@
 import ast
-import builtins
 
 immutables = {tuple,int,float,complex,str,bytes}
 class SourceVisitor(ast.NodeVisitor):
@@ -38,6 +37,7 @@ class SourceVisitor(ast.NodeVisitor):
         except BaseException:
             return None
 
+    """Constructor"""
     def __init__(self,source={}):
         self.source = source
         self.referencePool = {}
@@ -148,6 +148,7 @@ class SourceVisitor(ast.NodeVisitor):
             else:
                 raise NotImplementedError("Target collection probably indexed with a slice.")
         self.printSource()
+        
 
     def visit_Subscript(self, node):
         """Returns the slice of a collection in source that corresponds to the slice contained within the given Subscript node."""
@@ -417,7 +418,7 @@ class SourceVisitor(ast.NodeVisitor):
             elif node.func.value.id in SourceVisitor.globals:
                 return getattr(SourceVisitor.globals[node.func.value.id], node.func.attr)(*arguments)
         if isinstance(node.func, ast.Name):
-            return getattr(builtins, node.func.id)(*arguments)
+            return getattr(__builtins__, node.func.id)(*arguments)
 
     def buildTempSource(self, node):
         """
