@@ -90,7 +90,8 @@ class SourceVisitor(ast.NodeVisitor):
                         SourceVisitor.globals[visitedTarget[i]] = visitedValue[i]
                         continue
                     self.source[visitedTarget[i]] = visitedValue[i]
-            else:
+            else:   #Nog support nodig voor target geïndexeerd met slice of index!
+                    #Anders kunnen we bijv. niet a[1] = 2 of a[1:2] = [2] doen
                 if visitedTarget in SourceVisitor.globals and visitedTarget not in self.source:
                     SourceVisitor.globals[visitedTarget] = self.unpack(node.value)
                 else:
@@ -391,11 +392,13 @@ class SourceVisitor(ast.NodeVisitor):
                 for n in node.body:
                     self.visit(n)
                     element = self.source[self.visit(node.target)]
-        if isinstance(node.iter, ast.Call):
+        elif isinstance(node.iter, ast.Call):
             for j in self.visit(node.iter):
                 self.source[node.target.id] = j
                 for n in node.body:
                     self.visit(n)
+        elif isinstance(node.iter,ast.Subscript):
+            pass #To-do: implementeer hier support voor subscripts
         for n in node.orelse:
             self.visit(n)
 
@@ -515,55 +518,9 @@ def main(source):
 
 if __name__ == '__main__':
     text = """
-global g
-global gl
-def test(a, b, l):
-    a.append(1)
-    b += 1
-    c = 1 + b 
-    l.append(c)
-    l.pop()
-    g = 3
-    l.sort()
-    if 1 in l:
-        l.append(1)
-    d = range(0, len(l))
-    gl.append(4)
-    
-a = 2
-x,y,z = 1,[1,2],a
-b = 4
-gl = [1,2]
-ll = [1, 2, 3, 4]
-if (a * 2 >= 4) and (1 > a or b > 3):
-    c = 2
-    while c > 0:
-        c -= 1
-else:
-    for i in range(0, len(ll)):
-        ll[i] *= ll[i]
-    for i in ll:
-        i /= i
-    else:
-        b += 1
-if (a * 2 >= 4) and (1 > a or b > 3):
-    for i in range(0, len(ll)):
-        ll[i] *= ll[i]
-    for i in ll:
-        i = 2
-    else:
-        b += 1
-else:
-    c = 2
-    while c > 0:
-        c -= 1
-a = 4
-gl.append(3)
-print("passed")
-b += a
-test(ll, l = ll, b = 1)
-a += b
-g = 5
-print(a,b,c,x,y,z,i,ll,gl)
+a = [1,2,3,4,5]
+for i in a[1:3]:
+    i += 1
+print(a)
 """
     main(text)
