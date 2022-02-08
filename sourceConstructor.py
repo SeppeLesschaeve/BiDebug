@@ -7,6 +7,24 @@ class SourceVisitor(ast.NodeVisitor):
     """Class variables"""
     funcs = {}
     globals = {}
+    add = lambda a,b : a + b
+    sub = lambda a,b : a - b
+    mul = lambda a,b : a * b
+    div = lambda a,b : a / b
+    en  = lambda a,b : a and b
+    of  = lambda a,b : a or b
+    niet = lambda a : not a
+    eq  = lambda a,b : a == b
+    neq = lambda a,b : a != b
+    lt  = lambda a,b : a < b
+    lte = lambda a,b : a <= b
+    gt  = lambda a,b : a > b
+    gte = lambda a,b : a >= b
+    inn = lambda a,b : a in b
+    nin = lambda a,b : a not in b
+    iss = lambda a,b : a is b
+    nis = lambda a,b : a is not b
+
 
     """Class functions"""
     def constant(s):
@@ -80,19 +98,19 @@ class SourceVisitor(ast.NodeVisitor):
 
     def visit_Add(self, node):
         """Returns a binary addition function."""
-        return lambda a,b : a + b
+        return SourceVisitor.add
 
     def visit_Sub(self, node):
         """Returns a binary subtraction function."""
-        return lambda a,b : a - b
+        return SourceVisitor.sub
 
     def visit_Mult(self, node):
         """Returns a binary multiplication function."""
-        return lambda a,b : a * b
+        return SourceVisitor.mul
 
     def visit_Div(self, node):
         """Returns a binary division function."""
-        return lambda a,b : a / b
+        return SourceVisitor.div
 
     def visit_AugAssign(self, node):
         """
@@ -175,27 +193,27 @@ class SourceVisitor(ast.NodeVisitor):
 
     def visit_Eq(self, node):
         """Returns a binary equality function."""
-        return lambda a,b : a == b
+        return SourceVisitor.eq
 
     def visit_NotEq(self, node):
         """Returns a binary inequality function."""
-        return lambda a,b : a != b
+        return SourceVisitor.neq
 
     def visit_Lt(self, node):
         """Returns a binary less-than function."""
-        return lambda a,b : a < b
+        return SourceVisitor.lt
 
     def visit_LtE(self, node):
         """Returns a binary less-than-or-equal-to function."""
-        return lambda a,b : a <= b
+        return SourceVisitor.lte
 
     def visit_Gt(self, node):
         """Returns a binary greater-than function."""
-        return lambda a,b : a > b
+        return SourceVisitor.gt
 
     def visit_GtE(self, node):
         """Returns a binary greater-than-or-equal-to function."""
-        return lambda a,b : a >= b
+        return SourceVisitor.gte
 
     def visit_List(self, node):
         """
@@ -223,19 +241,19 @@ class SourceVisitor(ast.NodeVisitor):
 
     def visit_In(self, node):
         """Returns a binary in operation."""
-        return lambda a,b : a in b
+        return SourceVisitor.inn
 
     def visit_NotIn(self, node):
         """Returns a binary not-in operation."""
-        return lambda a,b : a not in b
+        return SourceVisitor.nin
 
     def visit_IsNot(self, node):
         """Returns a binary is-not operation."""
-        return lambda a,b : a is not b
+        return SourceVisitor.nis
 
     def visit_Is(self, node):
         """Returns a binary is operation."""
-        return lambda a,b : a is b
+        return SourceVisitor.iss
 
     def visit_Expr(self, node):
         """Visits the expression contained by the node."""
@@ -276,11 +294,14 @@ class SourceVisitor(ast.NodeVisitor):
 
     def visit_And(self, node):
         """Returns a binary and function."""
-        return lambda a,b : a and b
+        return SourceVisitor.en
 
     def visit_Or(self, node):
         """Returns a binary or function."""
-        return lambda a,b : a or b
+        return SourceVisitor.of
+    
+    def visit_Not(self, node):
+        return SourceVisitor.niet
 
     def visit_While(self, node):
         """
