@@ -61,6 +61,7 @@ class SourceVisitor(ast.NodeVisitor):
         return node.id
     
     class Undefined:
+        """A subclass to identify undefined global variables."""
         def __init__(self):
             pass
     def visit_Global(self, node):
@@ -158,7 +159,7 @@ class SourceVisitor(ast.NodeVisitor):
 
     def visit_slice(self,node):
         """Returns a slice of indices for the given Slice node."""
-        return range(node.lower,node.upper)
+        return slice(node.lower,node.upper)
         #of kan ook een slice values van de lijst zelf zijn, als ik het niet juist geïnterpreteerd heb zoals het er staat,
         # maar het lijkt wel juist te zijn.
 
@@ -231,6 +232,7 @@ class SourceVisitor(ast.NodeVisitor):
         return elements
 
     def visit_Tuple(self, node):
+        """Returns a tuple in accordance with node."""
         l = []
         if isinstance(node.ctx,ast.Store):
             for el in node.elts:
