@@ -1,5 +1,6 @@
 import ast
 
+
 immutables = {tuple,int,float,complex,str,bytes}
 class SourceVisitor(ast.NodeVisitor):
 
@@ -42,7 +43,8 @@ class SourceVisitor(ast.NodeVisitor):
         self.source = source
         self.referencePool = {}
         self.returnValue = None
-
+    
+    """Methods"""
     def unpack(self,v):
         """Unpacks a variable such that the return value is its actual value, not its name."""
         if isinstance(v,ast.Name):
@@ -50,6 +52,13 @@ class SourceVisitor(ast.NodeVisitor):
                 return self.source[self.visit(v)]
             elif v.id in SourceVisitor.globals:
                 return SourceVisitor.globals[self.visit(v)]
+        elif isinstance(v,ast.Slice):
+            step = getattr(v,"step",None)
+            if not step:
+                step = 1
+            else:
+                step = self.visit(step)
+            return slice(self.visit(v.lower),self.visit(v.upper),step)
         return self.visit(v)
 
     def visit_Constant(self, node):
@@ -155,6 +164,10 @@ class SourceVisitor(ast.NodeVisitor):
     def visit_Subscript(self, node):
         """Returns the slice of a collection in source that corresponds to the slice contained within the given Subscript node."""
         slce = self.unpack(node.slice)
+        if node.value.id in self.source:
+            return self.source[node.value.id][slce]
+        elif node.value.id in self.globals:
+            return self.globals[node.value.id][slce]
         val = self.unpack(node.value)
         return val[slce]
 
@@ -342,7 +355,6 @@ class SourceVisitor(ast.NodeVisitor):
         for i in range(len(node.body)):
             funcn[1].append(node.body[i])
         self.printSource()
-        print(funcn)
 
     def visit_Call(self, node):
         """
@@ -397,8 +409,6 @@ class SourceVisitor(ast.NodeVisitor):
                 self.source[node.target.id] = j
                 for n in node.body:
                     self.visit(n)
-        elif isinstance(node.iter,ast.Subscript):
-            pass #To-do: implementeer hier support voor subscripts
         for n in node.orelse:
             self.visit(n)
 
@@ -518,9 +528,47 @@ def main(source):
 
 if __name__ == '__main__':
     text = """
-a = [1,2,3,4,5]
-for i in a[1:3]:
-    i += 1
-print(a)
+def test(a, b, l):
+    a.append(1)
+    b += 1
+    c = 1 + b 
+    l.append(c)
+    l.pop()
+    l.sort()
+    if 1 in l:
+        l.append(1)
+    d = range(0, len(l))
+    
+    
+a = 2
+b = 4
+c ,d = 3, 4
+ll = [1, 2, 3, 4]
+if (a * 2 >= 4) and (1 > a or b > 3):
+    c = 2
+    while c > 0:
+        c -= 1
+else:
+    for i in range(0, len(ll)):
+        ll[i] *= ll[i]
+    for i in ll:
+        i /= i
+    else:
+        b += 1
+if (a * 2 >= 4) and (1 > a or b > 3):
+    for i in range(0, len(ll)):
+        ll[i] *= ll[i]
+    for i in ll:
+        i = 2
+    else:
+        b += 1
+else:
+    c = 2
+    while c > 0:
+        c -= 1
+a = 4
+b += a
+test(ll, l = ll, b = 1)
+print(a,b,c,i,ll)
 """
     main(text)
