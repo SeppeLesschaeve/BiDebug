@@ -7,6 +7,7 @@ from _ast import withitem, alias, keyword, arg, arguments, ExceptHandler, compre
     ImportFrom, Import, Assert, Try, Raise, AsyncWith, With, If, While, AsyncFor, For, AnnAssign, AugAssign, Assign, \
     Delete, Return, ClassDef, AsyncFunctionDef, FunctionDef, Expression, Interactive, Module, AST
 from ast import NameConstant, Bytes, Str, Num, Param, AugStore, AugLoad, Suite, Index, ExtSlice
+from collections import deque
 from typing import Any
 
 
@@ -26,7 +27,11 @@ class CompositeOperation(Operation):
 
     def __init__(self):
         Operation.__init__(self)
-        self.operations = None
+        self.operations = []
+        self.current = -1
+
+    def current_operation(self):
+        return None
 
 
 class IfThenElseOperation(CompositeOperation):
@@ -37,6 +42,15 @@ class IfThenElseOperation(CompositeOperation):
 
     def update_previous(self):
         self.choices_stack.pop()
+
+    def current_operation(self):
+        if self.current == -1:
+            return self.operations[0]
+        else:
+            if self.choices_stack[-1] == 1:
+                return self.operations[1][self.current]
+            else:
+                return self.operations[2][self.current]
 
 
 class WhileOperation(CompositeOperation):
@@ -51,6 +65,12 @@ class WhileOperation(CompositeOperation):
     def update_previous(self):
         self.number -= 1
 
+    def current_operation(self):
+        if self.current == -1:
+            return self.operations[0]
+        else:
+            return self.operations[1][self.current]
+
 
 class ForOperation(CompositeOperation):
 
@@ -64,6 +84,12 @@ class ForOperation(CompositeOperation):
 
     def update_previous(self):
         self.index -= 1
+
+    def current_operation(self):
+        if self.current == -1:
+            return self.operations[0]
+        else:
+            return self.operations[1][self.current]
 
 
 class FunctionOperation(CompositeOperation):
@@ -795,10 +821,14 @@ class SourceCreator(ast.NodeVisitor):
     def visit_While(self, node: While) -> Any:
         while_operation = WhileOperation()
         operations = [node.test]
+        while_operations = []
         for statement in node.body:
-            operations.append(self.visit(statement))
+            while_operations.append(self.visit(statement))
+        for operation in while_operations:
+            operation.parent_operation = while_operation
         for operation in operations:
             operation.parent_operation = while_operation
+        operations.append(while_operations)
         while_operation.operations = operations
         return while_operation
 
@@ -878,7 +908,7 @@ class SourceCreator(ast.NodeVisitor):
 
     def visit_IfExp(self, node: IfExp) -> Any:
         if_then_else_operation = IfThenElseOperation()
-        operations = [node.test, self.visit(node.body), self.visit(node.orelse)]
+        operations = [node.test, [self.visit(node.body)], [self.visit(node.orelse)]]
         for operation in operations:
             operation.parent_operation = if_then_else_operation
         if_then_else_operation.operations = operations
@@ -1099,6 +1129,7 @@ class SourceCreator(ast.NodeVisitor):
 
     def __init__(self):
         self.tree = None
+        self.call_stack = deque()
         self.source = {}
 
     def build_tree(self, text):
@@ -1110,7 +1141,10 @@ class SourceCreator(ast.NodeVisitor):
         return
 
     def current_operation(self):
-        pass
+        if self.call_stack:
+            return self.call_stack[-1].current_operation()
+        else:
+            return None
 
 
 class SourceController:
