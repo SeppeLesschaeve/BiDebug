@@ -425,9 +425,8 @@ class ReverseVisitor(ast.NodeVisitor):
     def __init__(self):
         self.source = None
 
-    def execute(self, operation, source_controller):
+    def execute(self, operation):
         self.visit(operation)
-        source_controller.update(self.source)
 
 
 class ForwardVisitor(ast.NodeVisitor):
@@ -756,9 +755,8 @@ class ForwardVisitor(ast.NodeVisitor):
     def __init__(self):
         self.source = None
 
-    def execute(self, operation, source_controller):
+    def execute(self, operation):
         self.visit(operation)
-        source_controller.update(self.source)
 
 
 class SourceCreator(ast.NodeVisitor):
@@ -1150,34 +1148,40 @@ class SourceCreator(ast.NodeVisitor):
 class SourceController:
 
     def __init__(self):
-        self.source_creator = SourceCreator()
         self.forward_visitor = ForwardVisitor()
         self.reverse_visitor = ReverseVisitor()
+
+    def execute(self, number, operation):
+        if number == 1:
+            self.forward_visitor.execute(operation)
+        elif number == 2:
+            self.reverse_visitor.execute(operation)
+
+
+class Debugger:
+
+    def __init__(self, source_controller, source_creator):
+        self.source_controller = source_controller
+        self.source_creator = source_creator
 
     def update(self, source):
         self.source_creator.update(source)
 
     def execute(self, number):
-        if number == 1:
-            self.forward_visitor.execute(self.source_creator.current_operation(), self)
-        elif number == 2:
-            self.reverse_visitor.execute(self.source_creator.current_operation(), self)
-
-
-class Debugger:
-
-    def __init__(self):
-        self.source_controller = SourceController()
-
-    def execute(self, number):
-        self.source_controller.execute(number)
+        self.source_controller.execute(number, self.source_creator.current_operation())
 
 
 def main(source):
-    # print(ast.dump(tree))
-    source_constructor = SourceCreator()
-    source_constructor.build_tree(source)
-    # print(usage_analyzer.source)
+    source_creator = SourceCreator()
+    source_creator.build_tree(source)
+    source_controller = SourceController()
+    debugger = Debugger(source_controller, source_creator)
+    while True:
+        number = int(input())
+        if number == 3:
+            break
+        else:
+            debugger.execute(number)
 
 
 if __name__ == '__main__':
