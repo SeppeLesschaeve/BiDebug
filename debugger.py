@@ -28,10 +28,10 @@ class CompositeOperation(Operation):
     def __init__(self):
         Operation.__init__(self)
         self.operations = []
-        self.current = -1
+        self.current = 0
 
     def current_operation(self):
-        return None
+        return self.operations[self.current]
 
 
 class IfThenElseOperation(CompositeOperation):
@@ -39,6 +39,7 @@ class IfThenElseOperation(CompositeOperation):
     def __init__(self):
         self.choices_stack = []
         CompositeOperation.__init__(self)
+        self.current = -1
 
     def update_previous(self):
         self.choices_stack.pop()
@@ -1127,7 +1128,6 @@ class SourceCreator(ast.NodeVisitor):
 
     def __init__(self):
         self.tree = None
-        self.call_stack = deque()
         self.source = {}
 
     def build_tree(self, text):
@@ -1137,12 +1137,6 @@ class SourceCreator(ast.NodeVisitor):
 
     def update(self, source):
         return
-
-    def current_operation(self):
-        if self.call_stack:
-            return self.call_stack[-1].current_operation()
-        else:
-            return None
 
 
 class SourceController:
@@ -1163,12 +1157,20 @@ class Debugger:
     def __init__(self, source_controller, source_creator):
         self.source_controller = source_controller
         self.source_creator = source_creator
+        self.call_stack = deque()
+        self.call_stack.append('main')
+
+    def current_operation(self):
+        if self.call_stack:
+            return self.source_creator.source[self.call_stack[-1]].current_operation()
+        else:
+            return None
 
     def update(self, source):
         self.source_creator.update(source)
 
     def execute(self, number):
-        self.source_controller.execute(number, self.source_creator.current_operation())
+        self.source_controller.execute(number, self.current_operation())
 
 
 def main(source):
@@ -1190,11 +1192,20 @@ def test(a, b, l):
     b += 1
     c = 1 + b 
     while b > 1:
+        a -= 1
         for x in l:
             if x < 2:
                 x = 2
             else:
                 x *= 2
+        b -= 1        
 
+def main():
+    a = 2
+    b = 2
+    ll = [1,2,3,4]
+    test(a, b, ll)
+    
+main()    
 """
     main(input_program)
