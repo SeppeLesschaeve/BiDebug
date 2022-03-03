@@ -167,15 +167,14 @@ class ForwardVisitor(ast.NodeVisitor):
 
     def visit_Call(self, node: Call) -> Any:
         operation = self.source_creator.source[self.visit(node.func)]
-        operation.initialize()
         args = []
         for argument in node.args:
             args.append(self.get_value(self.visit(argument)))
-        i = 0
-        for argument in operation.arguments:
-            operation.arguments[argument].append(args[i])
-            i += 1
-        self.source_creator.call_stack.append(operation)
+        source = {}
+        for i in range(len(args)):
+            source[operation.arguments[i]] = args[i]
+        operation.source.append(source)
+        self.source_creator.call_stack.append([operation, 0])
 
     def visit_FormattedValue(self, node: FormattedValue) -> Any:
         return super().visit_FormattedValue(node)
@@ -368,9 +367,9 @@ class ForwardVisitor(ast.NodeVisitor):
         self.source_creator = source_creator
 
     def execute(self):
-        control_operation = self.source_creator.call_stack[-1]
-        operation = control_operation.operations[control_operation.current[-1]]
+        control_operation = self.source_creator.call_stack[-1][0]
+        operation = control_operation.operations[self.source_creator.call_stack[-1][1]]
         self.visit(operation)
-        control_operation = self.source_creator.call_stack[-1]
-        control_operation.update_next(self.source_creator.call_stack, self)
+        control_operation = self.source_creator.call_stack[-1][0]
+        control_operation.update_forward(self.source_creator.call_stack, self)
         print(operation)

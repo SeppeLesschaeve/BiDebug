@@ -1,5 +1,5 @@
 import ast
-from operations import WhileOperation, FunctionOperation, IfThenElseOperation, ForOperation
+from operations import WhileOperation, FunctionOperation, IfThenElseOperation, ForOperation, CompositeOperation
 from forward import ForwardVisitor
 from backward import BackwardVisitor
 from _ast import withitem, alias, keyword, arg, arguments, ExceptHandler, comprehension, NotIn, NotEq, LtE, Lt, IsNot, \
@@ -17,17 +17,22 @@ from typing import Any
 class SourceCreator(ast.NodeVisitor):
 
     def visit_Module(self, node: Module) -> Any:
+        global_part = []
         for program in node.body:
-            self.visit(program)
+            if not isinstance(program, ast.FunctionDef):
+                global_part.append(self.visit(program))
+            else:
+                self.visit(program)
+        global_program = CompositeOperation()
+        global_program.operations = global_part
+        self.source['globals'] = global_program
 
     def visit_FunctionDef(self, node: FunctionDef) -> Any:
-        function_def = FunctionOperation()
-        function_def.name = node.name
-        self.source[node.name] = function_def
-        args = {}
+        args = []
         for argument in node.args.args:
-            args[argument.arg] = []
-        function_def.arguments = args
+            args.append(argument.arg)
+        function_def = FunctionOperation(node.name, args)
+        self.source[node.name] = function_def
         operations = []
         for statement in node.body:
             operations.append(self.visit(statement))
@@ -396,8 +401,7 @@ class SourceCreator(ast.NodeVisitor):
 
     def initialize_stack(self):
         call_stack = deque()
-        call_stack.append(self.source['main'])
-        call_stack[-1].initialize()
+        call_stack.append([self.source['globals'], 0])
         self.call_stack = call_stack
 
 
@@ -428,8 +432,8 @@ class Debugger:
         self.source_controller.execute(number)
 
 
-def main(source):
-    source_creator = SourceCreator(source)
+def main(source_program):
+    source_creator = SourceCreator(source_program)
     source_controller = SourceController(source_creator)
     debugger = Debugger(source_controller, source_creator)
     while True:
@@ -454,12 +458,15 @@ def test(a, b, l):
                 x *= 2
         b -= 1        
 
+c = 1
+c += 6
 def main():
     a = 2
     b = 2
     ll = [1,2,3,4]
     test(a, b, ll)
-    
+
+d = 2    
 main()    
 """
     main(input_program)
