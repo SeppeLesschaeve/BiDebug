@@ -334,11 +334,10 @@ class BackwardVisitor(ast.NodeVisitor):
     def visit_Ellipsis(self, node: Ellipsis) -> Any:
         return super().visit_Ellipsis(node)
 
-    def __init__(self, source, source_creator):
-        self.source = source
+    def __init__(self, source_creator):
         self.source_creator = source_creator
 
     def execute(self):
-        operation = self.source_creator.source[self.source_creator.call_stack[-1]]
+        operation = self.source_creator.functions[self.source_creator.call_stack[-1]]
         self.visit(operation)
-        operation.update_previous(self.source_creator.call_stack, self)
+        operation.update_backward(self.source_creator.call_stack)

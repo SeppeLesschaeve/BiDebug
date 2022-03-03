@@ -17,22 +17,23 @@ from typing import Any
 class SourceCreator(ast.NodeVisitor):
 
     def visit_Module(self, node: Module) -> Any:
-        global_part = []
+        boot = FunctionOperation('boot', None)
+        boot_part = []
         for program in node.body:
             if not isinstance(program, ast.FunctionDef):
-                global_part.append(self.visit(program))
+                boot_part.append(self.visit(program))
             else:
                 self.visit(program)
-        global_program = CompositeOperation()
-        global_program.operations = global_part
-        self.source['globals'] = global_program
+        boot.operations = boot_part
+        self.functions['boot'] = boot
+        boot.source.append({})
 
     def visit_FunctionDef(self, node: FunctionDef) -> Any:
         args = []
         for argument in node.args.args:
             args.append(argument.arg)
         function_def = FunctionOperation(node.name, args)
-        self.source[node.name] = function_def
+        self.functions[node.name] = function_def
         operations = []
         for statement in node.body:
             operations.append(self.visit(statement))
@@ -385,7 +386,7 @@ class SourceCreator(ast.NodeVisitor):
         return node
 
     def __init__(self, text):
-        self.source = {}
+        self.functions = {}
         self.tree = None
         self.call_stack = None
         self.build_tree(text)
@@ -394,23 +395,22 @@ class SourceCreator(ast.NodeVisitor):
     def build_tree(self, text):
         self.tree = ast.parse(text)
         self.visit(self.tree)
-        print(self.source)
+        print(self.functions)
 
-    def update(self, source):
-        return
+    def get_source(self):
+        return self.functions['boot'].source[0]
 
     def initialize_stack(self):
         call_stack = deque()
-        call_stack.append([self.source['globals'], 0])
+        call_stack.append([self.functions['boot'], 0])
         self.call_stack = call_stack
 
 
 class SourceController:
 
     def __init__(self, source_creator):
-        source = {}
-        self.forward_visitor = ForwardVisitor(source, source_creator)
-        self.reverse_visitor = BackwardVisitor(source, source_creator)
+        self.forward_visitor = ForwardVisitor(source_creator)
+        self.reverse_visitor = BackwardVisitor(source_creator)
 
     def execute(self, number):
         if number == 1:

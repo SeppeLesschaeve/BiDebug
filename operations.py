@@ -27,7 +27,7 @@ class CompositeOperation(Operation):
                 if len(call_stack) > 1:
                     call_stack.append(call_stack[-2])
             else:
-                current[0].update_next(call_stack, forward)
+                current[0].update_next(call_stack)
         else:
             current[1] += 1
             if is_composite(self.operations[current[1]]):
@@ -36,14 +36,14 @@ class CompositeOperation(Operation):
                 call_stack.append([self.operations[current[1]-1], 0])
                 call_stack[-1].initialize(call_stack, forward)
 
-    def update_backward(self, call_stack, reverse):
+    def update_backward(self, call_stack):
         current = call_stack[-1]
         if current[1] == 0:
             if self.is_backward_completed():
                 current[0].finalize()
                 call_stack.pop()
             else:
-                current[0].update_back(call_stack, reverse)
+                current[0].update_back(call_stack)
         else:
             current[1] -= 1
             if is_composite(self.operations[current]):
@@ -66,11 +66,14 @@ class CompositeOperation(Operation):
     def finalize(self):
         return
 
-    def update_next(self, call_stack, forward):
+    def update_next(self, call_stack):
         return
 
-    def update_back(self, call_stack, reverse):
+    def update_back(self, call_stack):
         return
+
+    def get_source(self):
+        return self.parent_operation.source
 
 
 class IfThenElseOperation(CompositeOperation):
@@ -117,11 +120,11 @@ class WhileOperation(CompositeOperation):
     def finalize(self):
         self.number.pop()
 
-    def update_next(self, call_stack, forward):
+    def update_next(self, call_stack):
         call_stack[-1][1] = 0
         self.number[-1] += 1
 
-    def update_back(self, call_stack, reverse):
+    def update_back(self, call_stack):
         self.number[-1] -= 1
         call_stack[-1][1] = len(self.operations) - 1
 
@@ -140,15 +143,15 @@ class ForOperation(CompositeOperation):
     def is_backward_completed(self):
         return self.index == 0
 
-    def update_next(self, call_stack, forward):
+    def update_next(self, call_stack):
         call_stack[-1][1] = 0
         self.index += 1
-        forward.source[self.target] = self.iter[self.index]
+        call_stack[-1][0].get_source()[self.target] = self.iter[self.index]
 
-    def update_back(self, call_stack, reverse):
+    def update_back(self, call_stack):
         call_stack[-1][1] = len(self.operations) - 1
         self.index -= 1
-        reverse.source[self.target] = self.iter[self.index]
+        call_stack[-1][0].get_source()[self.target] = self.iter[self.index]
 
 
 class FunctionOperation(CompositeOperation):
@@ -164,4 +167,7 @@ class FunctionOperation(CompositeOperation):
 
     def finalize(self):
         self.arguments.pop()
+
+    def get_source(self):
+        return self.source[-1]
 

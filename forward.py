@@ -11,11 +11,15 @@ from ast import NameConstant, Bytes, Str, Num, Param, AugStore, AugLoad, Suite, 
 from collections import deque
 from typing import Any
 
+
 class ForwardVisitor(ast.NodeVisitor):
 
     def get_value(self, reference):
         if isinstance(reference, str):
-            return self.source[reference][-1]
+            if reference in self.source_creator.call_stack[-1][0].get_source():
+                return self.source_creator.call_stack[-1][0].get_source()[reference]
+            elif reference in self.source_creator.get_source():
+                return self.source_creator.get_source()[reference]
         else:
             return reference
 
@@ -55,13 +59,26 @@ class ForwardVisitor(ast.NodeVisitor):
         for target in node.targets:
             targets.append(self.visit(target))
         for target in targets:
-            if target in self.source:
-                self.source[target].append(value)
+            if target in self.source_creator.call_stack[-1][0].get_source():
+                self.source_creator.call_stack[-1][0].get_source()[target].append(value)
+            elif target in self.source_creator.get_source():
+                self.source_creator.get_source()[target].append(value)
             else:
-                self.source[target] = [value]
+                self.source_creator.call_stack[-1][0].get_source()[target] = [value]
 
     def visit_AugAssign(self, node: AugAssign) -> Any:
-        return super().visit_AugAssign(node)
+        target = self.visit(node.target)
+        if target in self.source_creator.call_stack[-1][0].get_source():
+            self.operands.append(self.source_creator.call_stack[-1][0].get_source()[target][-1])
+        elif target in self.source_creator.get_source():
+            self.operands.append(self.source_creator.get_source()[target][-1])
+        self.operands.append(self.visit(node.value))
+        self.visit(node.op)
+        if target in self.source_creator.call_stack[-1][0].get_source():
+            self.source_creator.call_stack[-1][0].get_source()[target][-1] = self.operands[0]
+        elif target in self.source_creator.get_source():
+            self.source_creator.get_source()[target][-1] = self.operands[0]
+        self.operands = []
 
     def visit_AnnAssign(self, node: AnnAssign) -> Any:
         return super().visit_AnnAssign(node)
@@ -166,7 +183,7 @@ class ForwardVisitor(ast.NodeVisitor):
         return super().visit_Compare(node)
 
     def visit_Call(self, node: Call) -> Any:
-        operation = self.source_creator.source[self.visit(node.func)]
+        operation = self.source_creator.functions[self.visit(node.func)]
         args = []
         for argument in node.args:
             args.append(self.get_value(self.visit(argument)))
@@ -228,7 +245,10 @@ class ForwardVisitor(ast.NodeVisitor):
         return super().visit_Or(node)
 
     def visit_Add(self, node: Add) -> Any:
-        return super().visit_Add(node)
+        result = self.operands[-2] + self.operands[-1]
+        self.operands.pop()
+        self.operands.pop()
+        self.operands.append(result)
 
     def visit_BitAnd(self, node: BitAnd) -> Any:
         return super().visit_BitAnd(node)
@@ -362,14 +382,14 @@ class ForwardVisitor(ast.NodeVisitor):
     def visit_Ellipsis(self, node: Ellipsis) -> Any:
         return super().visit_Ellipsis(node)
 
-    def __init__(self, source, source_creator):
-        self.source = source
+    def __init__(self, source_creator):
+        self.operands = []
         self.source_creator = source_creator
 
     def execute(self):
         control_operation = self.source_creator.call_stack[-1][0]
         operation = control_operation.operations[self.source_creator.call_stack[-1][1]]
         self.visit(operation)
-        control_operation = self.source_creator.call_stack[-1][0]
-        control_operation.update_forward(self.source_creator.call_stack, self)
+        if control_operation == self.source_creator.call_stack[-1][0]:
+            control_operation.update_forward(self.source_creator.call_stack, self)
         print(operation)
