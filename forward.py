@@ -16,10 +16,7 @@ class ForwardVisitor(ast.NodeVisitor):
 
     def get_value(self, reference):
         if isinstance(reference, str):
-            if reference in self.source_creator.call_stack[-1][0].get_source():
-                return self.source_creator.call_stack[-1][0].get_source()[reference]
-            elif reference in self.source_creator.get_source():
-                return self.source_creator.get_source()[reference]
+            return self.source_creator.get_active_source(reference)
         else:
             return reference
 
@@ -59,25 +56,19 @@ class ForwardVisitor(ast.NodeVisitor):
         for target in node.targets:
             targets.append(self.visit(target))
         for target in targets:
-            if target in self.source_creator.call_stack[-1][0].get_source():
-                self.source_creator.call_stack[-1][0].get_source()[target].append(value)
-            elif target in self.source_creator.get_source():
-                self.source_creator.get_source()[target].append(value)
+            source = self.source_creator.get_active_source(target)
+            if target in source:
+                source[target].append(value)
             else:
-                self.source_creator.call_stack[-1][0].get_source()[target] = [value]
+                source[target] = [value]
 
     def visit_AugAssign(self, node: AugAssign) -> Any:
         target = self.visit(node.target)
-        if target in self.source_creator.call_stack[-1][0].get_source():
-            self.operands.append(self.source_creator.call_stack[-1][0].get_source()[target][-1])
-        elif target in self.source_creator.get_source():
-            self.operands.append(self.source_creator.get_source()[target][-1])
+        source = self.source_creator.get_active_source(target)
+        self.operands.append(source[-1])
         self.operands.append(self.visit(node.value))
         self.visit(node.op)
-        if target in self.source_creator.call_stack[-1][0].get_source():
-            self.source_creator.call_stack[-1][0].get_source()[target][-1] = self.operands[0]
-        elif target in self.source_creator.get_source():
-            self.source_creator.get_source()[target][-1] = self.operands[0]
+        source[-1] = self.operands[0]
         self.operands = []
 
     def visit_AnnAssign(self, node: AnnAssign) -> Any:

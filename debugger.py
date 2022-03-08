@@ -397,8 +397,12 @@ class SourceCreator(ast.NodeVisitor):
         self.visit(self.tree)
         print(self.functions)
 
-    def get_source(self):
-        return self.functions['boot'].source[0]
+    def get_active_source(self, reference):
+        source = self.call_stack[-1][0].get_source()
+        if reference in source:
+            return source[reference]
+        else:
+            return self.functions['boot'].source[0][reference]
 
     def initialize_stack(self):
         call_stack = deque()
