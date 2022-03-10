@@ -1,4 +1,6 @@
 import ast
+
+import operations
 from operations import WhileOperation, FunctionOperation, IfThenElseOperation, ForOperation
 from _ast import withitem, alias, keyword, arg, arguments, ExceptHandler, comprehension, NotIn, NotEq, LtE, Lt, IsNot, \
     Is, In, GtE, Gt, Eq, USub, UAdd, Not, Invert, Sub, RShift, Pow, MatMult, Mult, Mod, LShift, FloorDiv, Div, BitXor, \
@@ -14,11 +16,18 @@ from typing import Any
 
 class ForwardVisitor(ast.NodeVisitor):
 
-    def get_value(self, reference):
-        if isinstance(reference, str):
-            return self.source_creator.get_active_source(reference)
+    def evaluate(self, operand):
+        if isinstance(operand, str):
+            return self.source_creator.get_active_source(operand)[-1]
+        elif isinstance(operand, Call):
+            self.visit(operand)
+            operation = self.source_creator.call_stack[-1]
+            while not operation.is_forward_completed(self):
+                self.debugger.execute()
+            else:
+                self.source_creator.call_stack.append()
         else:
-            return reference
+            return operand
 
     def visit(self, node: AST) -> Any:
         return super().visit(node)
@@ -51,25 +60,22 @@ class ForwardVisitor(ast.NodeVisitor):
         return super().visit_Delete(node)
 
     def visit_Assign(self, node: Assign) -> Any:
-        value = self.get_value(self.visit(node.value))
+        value = self.evaluate(self.visit(node.value))
         targets = []
         for target in node.targets:
             targets.append(self.visit(target))
         for target in targets:
             source = self.source_creator.get_active_source(target)
-            if target in source:
-                source[target].append(value)
+            if isinstance(source, list):
+                source.append(value)
             else:
                 source[target] = [value]
 
     def visit_AugAssign(self, node: AugAssign) -> Any:
         target = self.visit(node.target)
         source = self.source_creator.get_active_source(target)
-        self.operands.append(source[-1])
-        self.operands.append(self.visit(node.value))
-        self.visit(node.op)
-        source[-1] = self.operands[0]
-        self.operands = []
+        value = self.visit(node.op)(source[-1], self.evaluate(node.value))
+        source[-1] = value
 
     def visit_AnnAssign(self, node: AnnAssign) -> Any:
         return super().visit_AnnAssign(node)
@@ -132,7 +138,7 @@ class ForwardVisitor(ast.NodeVisitor):
         return super().visit_BoolOp(node)
 
     def visit_BinOp(self, node: BinOp) -> Any:
-        return super().visit_BinOp(node)
+        return self.visit(node.op)(self.evaluate(self.visit(node.left)), self.evaluate(self.visit(node.right)))
 
     def visit_UnaryOp(self, node: UnaryOp) -> Any:
         return super().visit_UnaryOp(node)
@@ -171,18 +177,28 @@ class ForwardVisitor(ast.NodeVisitor):
         return super().visit_YieldFrom(node)
 
     def visit_Compare(self, node: Compare) -> Any:
-        return super().visit_Compare(node)
+        comparators = [self.evaluate(self.visit(node.left))]
+        for comparator in node.comparators:
+            comparators.append(self.evaluate(self.visit(comparator)))
+        comparisons = []
+        for comparison in node.ops:
+            comparisons.append(comparison)
+        value = True
+        for i in range(len(comparisons)):
+            value = value and self.visit(comparisons[i])(self.evaluate(comparators[i]), self.evaluate(comparators[i+1]))
+        return value
 
     def visit_Call(self, node: Call) -> Any:
         operation = self.source_creator.functions[self.visit(node.func)]
         args = []
         for argument in node.args:
-            args.append(self.get_value(self.visit(argument)))
+            args.append(self.evaluate(self.visit(argument)))
         source = {}
         for i in range(len(args)):
-            source[operation.arguments[i]] = args[i]
+            source[operation.arguments[i]] = [args[i]]
         operation.source.append(source)
-        self.source_creator.call_stack.append([operation, 0])
+        self.source_creator.call_stack.append(operation)
+        operation.initialize(self)
 
     def visit_FormattedValue(self, node: FormattedValue) -> Any:
         return super().visit_FormattedValue(node)
@@ -230,16 +246,13 @@ class ForwardVisitor(ast.NodeVisitor):
         return super().visit_Store(node)
 
     def visit_And(self, node: And) -> Any:
-        return super().visit_And(node)
+        return operations.en
 
     def visit_Or(self, node: Or) -> Any:
-        return super().visit_Or(node)
+        return operations.of
 
     def visit_Add(self, node: Add) -> Any:
-        result = self.operands[-2] + self.operands[-1]
-        self.operands.pop()
-        self.operands.pop()
-        self.operands.append(result)
+        return operations.add
 
     def visit_BitAnd(self, node: BitAnd) -> Any:
         return super().visit_BitAnd(node)
@@ -251,7 +264,7 @@ class ForwardVisitor(ast.NodeVisitor):
         return super().visit_BitXor(node)
 
     def visit_Div(self, node: Div) -> Any:
-        return super().visit_Div(node)
+        return operations.div
 
     def visit_FloorDiv(self, node: FloorDiv) -> Any:
         return super().visit_FloorDiv(node)
@@ -263,7 +276,7 @@ class ForwardVisitor(ast.NodeVisitor):
         return super().visit_Mod(node)
 
     def visit_Mult(self, node: Mult) -> Any:
-        return super().visit_Mult(node)
+        return operations.mul
 
     def visit_MatMult(self, node: MatMult) -> Any:
         return super().visit_MatMult(node)
@@ -275,13 +288,13 @@ class ForwardVisitor(ast.NodeVisitor):
         return super().visit_RShift(node)
 
     def visit_Sub(self, node: Sub) -> Any:
-        return super().visit_Sub(node)
+        return operations.sub
 
     def visit_Invert(self, node: Invert) -> Any:
         return super().visit_Invert(node)
 
     def visit_Not(self, node: Not) -> Any:
-        return super().visit_Not(node)
+        return operations.niet
 
     def visit_UAdd(self, node: UAdd) -> Any:
         return super().visit_UAdd(node)
@@ -290,34 +303,34 @@ class ForwardVisitor(ast.NodeVisitor):
         return super().visit_USub(node)
 
     def visit_Eq(self, node: Eq) -> Any:
-        return super().visit_Eq(node)
+        return operations.eq
 
     def visit_Gt(self, node: Gt) -> Any:
-        return super().visit_Gt(node)
+        return operations.gt
 
     def visit_GtE(self, node: GtE) -> Any:
-        return super().visit_GtE(node)
+        return operations.gte
 
     def visit_In(self, node: In) -> Any:
-        return super().visit_In(node)
+        return operations.inn
 
     def visit_Is(self, node: Is) -> Any:
-        return super().visit_Is(node)
+        return operations.iss
 
     def visit_IsNot(self, node: IsNot) -> Any:
-        return super().visit_IsNot(node)
+        return operations.nis
 
     def visit_Lt(self, node: Lt) -> Any:
-        return super().visit_Lt(node)
+        return operations.lt
 
     def visit_LtE(self, node: LtE) -> Any:
-        return super().visit_LtE(node)
+        return operations.lte
 
     def visit_NotEq(self, node: NotEq) -> Any:
-        return super().visit_NotEq(node)
+        return operations.neq
 
     def visit_NotIn(self, node: NotIn) -> Any:
-        return super().visit_NotIn(node)
+        return operations.nin
 
     def visit_comprehension(self, node: comprehension) -> Any:
         return super().visit_comprehension(node)
@@ -374,13 +387,13 @@ class ForwardVisitor(ast.NodeVisitor):
         return super().visit_Ellipsis(node)
 
     def __init__(self, source_creator):
-        self.operands = []
+        self.debugger = None
         self.source_creator = source_creator
 
     def execute(self):
-        control_operation = self.source_creator.call_stack[-1][0]
-        operation = control_operation.operations[self.source_creator.call_stack[-1][1]]
+        control_operation = self.source_creator.call_stack[-1]
+        operation = control_operation.operations[control_operation.current[-1]]
         self.visit(operation)
-        if control_operation == self.source_creator.call_stack[-1][0]:
+        if control_operation == self.source_creator.call_stack[-1]:
             control_operation.update_forward(self.source_creator.call_stack, self)
         print(operation)

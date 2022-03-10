@@ -44,6 +44,11 @@ class BackwardVisitor(ast.NodeVisitor):
         return super().visit_Delete(node)
 
     def visit_Assign(self, node: Assign) -> Any:
+        targets = []
+        for target in node.targets:
+            targets.append(self.visit(target))
+        for target in targets:
+            source = self.source_creator.get_active_source(target)
         return super().visit_Assign(node)
 
     def visit_AugAssign(self, node: AugAssign) -> Any:
@@ -336,8 +341,12 @@ class BackwardVisitor(ast.NodeVisitor):
 
     def __init__(self, source_creator):
         self.source_creator = source_creator
+        self.debugger = None
 
     def execute(self):
-        operation = self.source_creator.functions[self.source_creator.call_stack[-1]]
+        control_operation = self.source_creator.call_stack[-1][0]
+        operation = control_operation.operations[self.source_creator.call_stack[-1][1]]
         self.visit(operation)
-        operation.update_backward(self.source_creator.call_stack)
+        if control_operation == self.source_creator.call_stack[-1][0]:
+            control_operation.update_backward(self.source_creator.call_stack, self)
+        print(operation)

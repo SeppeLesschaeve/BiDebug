@@ -25,8 +25,8 @@ class SourceCreator(ast.NodeVisitor):
             else:
                 self.visit(program)
         boot.operations = boot_part
-        self.functions['boot'] = boot
         boot.source.append({})
+        self.functions['boot'] = boot
 
     def visit_FunctionDef(self, node: FunctionDef) -> Any:
         args = []
@@ -101,8 +101,6 @@ class SourceCreator(ast.NodeVisitor):
         for statement in node.orelse:
             else_operations.append(self.visit(statement))
         for operation in else_operations:
-            operation.parent_operation = if_then_else_operation
-        for operation in operations:
             operation.parent_operation = if_then_else_operation
         operations.append(then_operations)
         operations.append(else_operations)
@@ -398,15 +396,19 @@ class SourceCreator(ast.NodeVisitor):
         print(self.functions)
 
     def get_active_source(self, reference):
-        source = self.call_stack[-1][0].get_source()
+        source = self.call_stack[-1].get_source()
         if reference in source:
             return source[reference]
         else:
-            return self.functions['boot'].source[0][reference]
+            source = self.functions['boot'].source[0]
+            if reference in source:
+                return source[reference]
+            else:
+                return self.call_stack[-1].get_source()
 
     def initialize_stack(self):
         call_stack = deque()
-        call_stack.append([self.functions['boot'], 0])
+        call_stack.append(self.functions['boot'])
         self.call_stack = call_stack
 
 
@@ -415,12 +417,20 @@ class SourceController:
     def __init__(self, source_creator):
         self.forward_visitor = ForwardVisitor(source_creator)
         self.reverse_visitor = BackwardVisitor(source_creator)
+        source_creator.call_stack[-1].initialize(self.forward_visitor)
 
-    def execute(self, number):
+    def set_debugger(self, debugger):
+        self.forward_visitor.debugger = debugger
+        self.reverse_visitor.debugger = debugger
+
+    def execute(self):
+        number = int(input())
         if number == 1:
             self.forward_visitor.execute()
         elif number == 2:
             self.reverse_visitor.execute()
+        else:
+            raise Exception
 
 
 class Debugger:
@@ -432,20 +442,20 @@ class Debugger:
     def update(self, source):
         self.source_creator.update(source)
 
-    def execute(self, number):
-        self.source_controller.execute(number)
+    def execute(self):
+        self.source_controller.execute()
 
 
 def main(source_program):
     source_creator = SourceCreator(source_program)
     source_controller = SourceController(source_creator)
     debugger = Debugger(source_controller, source_creator)
+    debugger.source_controller.set_debugger(debugger)
     while True:
-        number = int(input())
-        if number == 3:
+        try:
+            debugger.source_controller.execute()
+        except Exception:
             break
-        else:
-            debugger.execute(number)
 
 
 if __name__ == '__main__':
@@ -464,6 +474,7 @@ def test(a, b, l):
 
 c = 1
 c += 6
+c = 9
 def main():
     a = 2
     b = 2
