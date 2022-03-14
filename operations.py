@@ -60,19 +60,18 @@ class CompositeOperation(Operation):
                     new_current.initialize(forward)
 
     def update_backward(self, call_stack):
-        current = call_stack[-1]
-        if current[1] == 0:
-            if self.is_backward_completed():
-                current[0].finalize()
-                call_stack.pop()
-            else:
-                current[0].update_back(call_stack)
+        parent = self
+        while parent.current[-1] == 0 and parent.is_backward_completed():
+            parent.finalize()
+            call_stack.pop()
+            parent = parent.parent_operation
         else:
-            current[1] -= 1
-            if is_composite(self.operations[current]):
-                if current[1] > 0:
-                    current[1] -= 1
-                call_stack.pop()
+            if parent.current[-1] == 0:
+                parent.update_back()
+            else:
+                parent.current[-1] -= 1
+                if is_composite(parent.operations[parent.current[-1]]):
+                    call_stack.pop()
 
     def is_composite(self):
         return True
@@ -92,7 +91,7 @@ class CompositeOperation(Operation):
     def update_next(self):
         return
 
-    def update_back(self, call_stack):
+    def update_back(self):
         return
 
     def get_source(self):
@@ -149,9 +148,9 @@ class WhileOperation(CompositeOperation):
         self.current[-1] = 0
         self.number[-1] += 1
 
-    def update_back(self, call_stack):
+    def update_back(self):
         self.number[-1] -= 1
-        call_stack[-1][1] = len(self.operations) - 1
+        self.current[-1] = len(self.operations) - 1
 
 
 class ForOperation(CompositeOperation):
@@ -173,10 +172,10 @@ class ForOperation(CompositeOperation):
         self.index += 1
         self.get_source()[self.target] = self.iter[self.index]
 
-    def update_back(self, call_stack):
-        call_stack[-1][1] = len(self.operations) - 1
+    def update_back(self):
+        self.current[-1] = len(self.operations) - 1
         self.index -= 1
-        call_stack[-1][0].get_source()[self.target] = self.iter[self.index]
+        self.get_source()[self.target] = self.iter[self.index]
 
 
 class FunctionOperation(CompositeOperation):
