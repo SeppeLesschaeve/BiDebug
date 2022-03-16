@@ -1,4 +1,6 @@
 import ast
+
+import operations
 from operations import WhileOperation, FunctionOperation, IfThenElseOperation, ForOperation
 from _ast import withitem, alias, keyword, arg, arguments, ExceptHandler, comprehension, NotIn, NotEq, LtE, Lt, IsNot, \
     Is, In, GtE, Gt, Eq, USub, UAdd, Not, Invert, Sub, RShift, Pow, MatMult, Mult, Mod, LShift, FloorDiv, Div, BitXor, \
@@ -12,6 +14,16 @@ from collections import deque
 from typing import Any
 
 class BackwardVisitor(ast.NodeVisitor):
+
+    def evaluate(self, operand):
+        if isinstance(operand, str):
+            return self.source_creator.get_active_source(operand)[-1]
+        elif isinstance(operand, Call):
+            result = self.source_creator.functions[self.visit(operand.func)].source[-1]['return']
+            self.source_creator.functions[self.visit(operand.func)].source.pop()
+            return result
+        else:
+            return operand
 
     def visit(self, node: AST) -> Any:
         return super().visit(node)
@@ -48,11 +60,13 @@ class BackwardVisitor(ast.NodeVisitor):
         for target in node.targets:
             targets.append(self.visit(target))
         for target in targets:
-            source = self.source_creator.get_active_source(target)
-        return super().visit_Assign(node)
+            self.source_creator.get_active_source(target).pop()
 
     def visit_AugAssign(self, node: AugAssign) -> Any:
-        return super().visit_AugAssign(node)
+        target = self.visit(node.target)
+        source = self.source_creator.get_active_source(target)
+        value = self.visit(node.op)(source[-1], self.evaluate(node.value))
+        source[-1] = value
 
     def visit_AnnAssign(self, node: AnnAssign) -> Any:
         return super().visit_AnnAssign(node)
@@ -97,7 +111,7 @@ class BackwardVisitor(ast.NodeVisitor):
         return super().visit_Nonlocal(node)
 
     def visit_Expr(self, node: Expr) -> Any:
-        return super().visit_Expr(node)
+        self.visit(node.value)
 
     def visit_Pass(self, node: Pass) -> Any:
         return super().visit_Pass(node)
@@ -115,7 +129,7 @@ class BackwardVisitor(ast.NodeVisitor):
         return super().visit_BoolOp(node)
 
     def visit_BinOp(self, node: BinOp) -> Any:
-        return super().visit_BinOp(node)
+        return self.visit(node.op)(self.evaluate(self.visit(node.left)), self.evaluate(self.visit(node.right)))
 
     def visit_UnaryOp(self, node: UnaryOp) -> Any:
         return super().visit_UnaryOp(node)
@@ -154,7 +168,16 @@ class BackwardVisitor(ast.NodeVisitor):
         return super().visit_YieldFrom(node)
 
     def visit_Compare(self, node: Compare) -> Any:
-        return super().visit_Compare(node)
+        comparators = [self.evaluate(self.visit(node.left))]
+        for comparator in node.comparators:
+            comparators.append(self.evaluate(self.visit(comparator)))
+        comparisons = []
+        for comparison in node.ops:
+            comparisons.append(comparison)
+        value = True
+        for i in range(len(comparisons)):
+            value = value and self.visit(comparisons[i])(self.evaluate(comparators[i]), self.evaluate(comparators[i+1]))
+        return value
 
     def visit_Call(self, node: Call) -> Any:
         return super().visit_Call(node)
@@ -166,7 +189,7 @@ class BackwardVisitor(ast.NodeVisitor):
         return super().visit_JoinedStr(node)
 
     def visit_Constant(self, node: Constant) -> Any:
-        return super().visit_Constant(node)
+        return node.value
 
     def visit_NamedExpr(self, node: NamedExpr) -> Any:
         return super().visit_NamedExpr(node)
@@ -181,13 +204,19 @@ class BackwardVisitor(ast.NodeVisitor):
         return super().visit_Starred(node)
 
     def visit_Name(self, node: Name) -> Any:
-        return super().visit_Name(node)
+        return node.id
 
     def visit_List(self, node: List) -> Any:
-        return super().visit_List(node)
+        elements = []
+        for el in node.elts:
+            elements.append(self.visit(el))
+        return elements
 
     def visit_Tuple(self, node: Tuple) -> Any:
-        return super().visit_Tuple(node)
+        elements = []
+        for el in node.elts:
+            elements.append(self.visit(el))
+        return elements
 
     def visit_Del(self, node: Del) -> Any:
         return super().visit_Del(node)
@@ -199,13 +228,13 @@ class BackwardVisitor(ast.NodeVisitor):
         return super().visit_Store(node)
 
     def visit_And(self, node: And) -> Any:
-        return super().visit_And(node)
+        return operations.en
 
     def visit_Or(self, node: Or) -> Any:
-        return super().visit_Or(node)
+        return operations.of
 
     def visit_Add(self, node: Add) -> Any:
-        return super().visit_Add(node)
+        return operations.sub
 
     def visit_BitAnd(self, node: BitAnd) -> Any:
         return super().visit_BitAnd(node)
@@ -217,7 +246,7 @@ class BackwardVisitor(ast.NodeVisitor):
         return super().visit_BitXor(node)
 
     def visit_Div(self, node: Div) -> Any:
-        return super().visit_Div(node)
+        return operations.mul
 
     def visit_FloorDiv(self, node: FloorDiv) -> Any:
         return super().visit_FloorDiv(node)
@@ -229,7 +258,7 @@ class BackwardVisitor(ast.NodeVisitor):
         return super().visit_Mod(node)
 
     def visit_Mult(self, node: Mult) -> Any:
-        return super().visit_Mult(node)
+        return operations.div
 
     def visit_MatMult(self, node: MatMult) -> Any:
         return super().visit_MatMult(node)
@@ -241,13 +270,13 @@ class BackwardVisitor(ast.NodeVisitor):
         return super().visit_RShift(node)
 
     def visit_Sub(self, node: Sub) -> Any:
-        return super().visit_Sub(node)
+        return operations.add
 
     def visit_Invert(self, node: Invert) -> Any:
         return super().visit_Invert(node)
 
     def visit_Not(self, node: Not) -> Any:
-        return super().visit_Not(node)
+        return operations.niet
 
     def visit_UAdd(self, node: UAdd) -> Any:
         return super().visit_UAdd(node)
@@ -256,34 +285,34 @@ class BackwardVisitor(ast.NodeVisitor):
         return super().visit_USub(node)
 
     def visit_Eq(self, node: Eq) -> Any:
-        return super().visit_Eq(node)
+        return operations.eq
 
     def visit_Gt(self, node: Gt) -> Any:
-        return super().visit_Gt(node)
+        return operations.gt
 
     def visit_GtE(self, node: GtE) -> Any:
-        return super().visit_GtE(node)
+        return operations.gte
 
     def visit_In(self, node: In) -> Any:
-        return super().visit_In(node)
+        return operations.inn
 
     def visit_Is(self, node: Is) -> Any:
-        return super().visit_Is(node)
+        return operations.iss
 
     def visit_IsNot(self, node: IsNot) -> Any:
-        return super().visit_IsNot(node)
+        return operations.nis
 
     def visit_Lt(self, node: Lt) -> Any:
-        return super().visit_Lt(node)
+        return operations.lt
 
     def visit_LtE(self, node: LtE) -> Any:
-        return super().visit_LtE(node)
+        return operations.lte
 
     def visit_NotEq(self, node: NotEq) -> Any:
-        return super().visit_NotEq(node)
+        return operations.neq
 
     def visit_NotIn(self, node: NotIn) -> Any:
-        return super().visit_NotIn(node)
+        return operations.nin
 
     def visit_comprehension(self, node: comprehension) -> Any:
         return super().visit_comprehension(node)
