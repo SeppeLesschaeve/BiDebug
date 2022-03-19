@@ -386,8 +386,8 @@ class BackwardVisitor(ast.NodeVisitor):
 
     def execute(self):
         control_operation = self.source_creator.call_stack[-1]
+        control_operation.update_backward(self.source_creator.call_stack)
+        control_operation = self.source_creator.call_stack[-1]
         operation = control_operation.operations[control_operation.current[-1]]
         self.visit(operation)
-        if control_operation == self.source_creator.call_stack[-1]:
-            control_operation.update_backward(self.source_creator.call_stack, self)
         print(operation)

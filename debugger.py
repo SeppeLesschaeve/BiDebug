@@ -460,28 +460,30 @@ def main(source_program):
 
 if __name__ == '__main__':
     input_program = """
-def test(a, b, l):
-    b += 1
-    c = 1 + b 
-    while b > 1:
-        a -= 1
-        for x in l:
-            if x < 2:
-                x = 2
-            else:
-                x *= 2
-        b -= 1        
+a = 1
+b = 2
+ll = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 
-c = 1
-c += 6
-c = 9
+
+def div(d1, d2):
+    return d1 / d2
+
+
 def main():
-    a = 2
-    b = 2
-    ll = [1,2,3,4]
-    test(a, b, ll)
+    for x in ll:
+        i = 0
+        while x > 4:
+            x = div(x, 2) - i
+    c = 2
+    while c > 0:
+        c -= 1
+        if c == 0:
+            break
+        else:
+            global a
+            a += 1
 
-d = 2    
-main()    
+
+main()   
 """
     main(input_program)
