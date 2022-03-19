@@ -123,7 +123,14 @@ class BackwardVisitor(ast.NodeVisitor):
         return super().visit_Continue(node)
 
     def visit_Slice(self, node: Slice) -> Any:
-        return super().visit_Slice(node)
+        lower = self.visit(node.lower)
+        higher = self.visit(node.higher)
+        step = self.visit(node.step)
+        elems = []
+        while lower < higher:
+            elems.append(lower)
+            lower += step
+        return elems
 
     def visit_BoolOp(self, node: BoolOp) -> Any:
         return super().visit_BoolOp(node)
@@ -198,7 +205,12 @@ class BackwardVisitor(ast.NodeVisitor):
         return super().visit_Attribute(node)
 
     def visit_Subscript(self, node: Subscript) -> Any:
-        return super().visit_Subscript(node)
+        values = self.visit(node.slice)
+        list = self.evaluate(node.value)
+        elems = []
+        for v in values:
+            elems.append(list[v])
+        return elems
 
     def visit_Starred(self, node: Starred) -> Any:
         return super().visit_Starred(node)
