@@ -54,7 +54,7 @@ class ForwardVisitor(ast.NodeVisitor):
         return super().visit_ClassDef(node)
 
     def visit_Return(self, node: Return) -> Any:
-        return super().visit_Return(node)
+        return self.visit(node.value)
 
     def visit_Delete(self, node: Delete) -> Any:
         return super().visit_Delete(node)
@@ -126,7 +126,9 @@ class ForwardVisitor(ast.NodeVisitor):
         return super().visit_Pass(node)
 
     def visit_Break(self, node: Break) -> Any:
-        return super().visit_Break(node)
+        control_operation = self.source_creator.call_stack[-2]
+        control_operation.update_forward()
+        self.source_creator.call_stack.append(control_operation)
 
     def visit_Continue(self, node: Continue) -> Any:
         return super().visit_Continue(node)

@@ -50,7 +50,7 @@ class BackwardVisitor(ast.NodeVisitor):
         return super().visit_ClassDef(node)
 
     def visit_Return(self, node: Return) -> Any:
-        return super().visit_Return(node)
+        return self.visit(node.value)
 
     def visit_Delete(self, node: Delete) -> Any:
         return super().visit_Delete(node)
@@ -117,7 +117,7 @@ class BackwardVisitor(ast.NodeVisitor):
         return super().visit_Pass(node)
 
     def visit_Break(self, node: Break) -> Any:
-        return super().visit_Break(node)
+        return
 
     def visit_Continue(self, node: Continue) -> Any:
         return super().visit_Continue(node)
