@@ -64,8 +64,8 @@ class SourceCreator(ast.NodeVisitor):
 
     def visit_For(self, node: For) -> Any:
         for_operation = ForOperation()
-        for_operation.target = node.target
-        for_operation.iter = node.iter
+        for_operation.target = self.visit(node.target)
+        for_operation.iterName = self.visit(node.iter)
         operations = []
         for statement in node.body:
             operations.append(self.visit(statement))
@@ -225,7 +225,7 @@ class SourceCreator(ast.NodeVisitor):
         return node
 
     def visit_Name(self, node: Name) -> Any:
-        return node
+        return node.id
 
     def visit_List(self, node: List) -> Any:
         return node

@@ -1,7 +1,7 @@
 import ast
 
 import operations
-from operations import WhileOperation, FunctionOperation, IfThenElseOperation, ForOperation
+from operations import WhileOperation, FunctionOperation, IfThenElseOperation, ForOperation, CompositeOperation
 from _ast import withitem, alias, keyword, arg, arguments, ExceptHandler, comprehension, NotIn, NotEq, LtE, Lt, IsNot, \
     Is, In, GtE, Gt, Eq, USub, UAdd, Not, Invert, Sub, RShift, Pow, MatMult, Mult, Mod, LShift, FloorDiv, Div, BitXor, \
     BitOr, BitAnd, Add, Or, And, Store, Load, Del, Tuple, List, Name, Starred, Subscript, Attribute, NamedExpr, \
@@ -387,6 +387,9 @@ class BackwardVisitor(ast.NodeVisitor):
     def execute(self):
         control_operation = self.source_creator.call_stack[-1]
         control_operation.update_backward(self.source_creator.call_stack)
+        operation = control_operation.operations[control_operation.current[-1]]
+        if isinstance(operation, CompositeOperation):
+            self.source_creator.call_stack.pop()
         control_operation = self.source_creator.call_stack[-1]
         operation = control_operation.operations[control_operation.current[-1]]
         self.visit(operation)

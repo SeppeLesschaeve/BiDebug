@@ -1,6 +1,3 @@
-def is_composite(operation):
-    return isinstance(operation, Operation) and operation.is_composite()
-
 add = lambda a, b: a + b
 sub = lambda a, b: a - b
 mul = lambda a, b: a * b
@@ -19,13 +16,11 @@ nin = lambda a, b: a not in b
 iss = lambda a, b: a is b
 nis = lambda a, b: a is not b
 
+
 class Operation:
 
     def __init__(self):
         self.parent_operation = None
-
-    def is_composite(self):
-        return False
 
 
 class CompositeOperation(Operation):
@@ -50,28 +45,16 @@ class CompositeOperation(Operation):
                 self.update_next()
         else:
             self.current[-1] += 1
-            new_current = self.operations[self.current[-1]]
-            if is_composite(new_current):
-                call_stack.append(new_current)
-                new_current.initialize(forward)
-                while is_composite(new_current.operations[0]):
-                    call_stack.append(new_current.operations[0])
-                    new_current = new_current.operations[0]
-                    new_current.initialize(forward)
 
     def update_backward(self, call_stack):
-        parent = self
-        while parent.current[-1] == 0 and parent.is_backward_completed():
-            parent.finalize()
+        if self.current[-1] == 0 and self.is_backward_completed():
+            self.finalize()
             call_stack.pop()
-            parent = parent.parent_operation
         else:
-            if parent.current[-1] == 0:
-                parent.update_back()
+            if self.current[-1] == 0:
+                self.update_back()
             else:
-                parent.current[-1] -= 1
-                if is_composite(parent.operations[parent.current[-1]]):
-                    call_stack.pop()
+                self.current[-1] -= 1
 
     def is_composite(self):
         return True
@@ -95,7 +78,7 @@ class CompositeOperation(Operation):
         return
 
     def get_source(self):
-        return self.parent_operation.get_source()[-1]
+        return self.parent_operation.get_source()
 
 
 class IfThenElseOperation(CompositeOperation):
@@ -156,26 +139,37 @@ class WhileOperation(CompositeOperation):
 class ForOperation(CompositeOperation):
 
     def __init__(self):
-        self.index = 0
-        self.iter = None
+        self.index = []
+        self.iter = []
         self.target = None
+        self.iterName = None
         CompositeOperation.__init__(self)
 
     def is_forward_completed(self, forward):
-        return self.index == len(self.iter) - 1
+        return self.index[-1] == len(self.iter[-1]) - 1
 
     def is_backward_completed(self):
-        return self.index == 0
+        return self.index[-1] == 0
+
+    def initialize(self, forward):
+        super(ForOperation, self).initialize(forward)
+        self.index.append(0)
+        self.iter.append(forward.evaluate(self.iterName))
+        self.get_source()[self.target] = self.iter[-1][self.index[-1]]
+
+    def finalize(self):
+        self.index.pop()
+        self.iter.pop()
 
     def update_next(self):
         self.current[-1] = 0
-        self.index += 1
-        self.get_source()[self.target] = self.iter[self.index]
+        self.index[-1] += 1
+        self.get_source()[self.target] = self.iter[-1][self.index[-1]]
 
     def update_back(self):
         self.current[-1] = len(self.operations) - 1
-        self.index -= 1
-        self.get_source()[self.target] = self.iter[self.index]
+        self.index[-1] -= 1
+        self.get_source()[self.target] = self.iter[-1][self.index[-1]]
 
 
 class FunctionOperation(CompositeOperation):
@@ -185,9 +179,6 @@ class FunctionOperation(CompositeOperation):
         self.arguments = arguments
         self.source = []
         CompositeOperation.__init__(self)
-
-    def set_arguments(self, args):
-        self.arguments = args
 
     def finalize(self):
         self.arguments.pop()

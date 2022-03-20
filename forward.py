@@ -1,7 +1,7 @@
 import ast
 
 import operations
-from operations import WhileOperation, FunctionOperation, IfThenElseOperation, ForOperation
+from operations import WhileOperation, FunctionOperation, IfThenElseOperation, ForOperation, CompositeOperation
 from _ast import withitem, alias, keyword, arg, arguments, ExceptHandler, comprehension, NotIn, NotEq, LtE, Lt, IsNot, \
     Is, In, GtE, Gt, Eq, USub, UAdd, Not, Invert, Sub, RShift, Pow, MatMult, Mult, Mod, LShift, FloorDiv, Div, BitXor, \
     BitOr, BitAnd, Add, Or, And, Store, Load, Del, Tuple, List, Name, Starred, Subscript, Attribute, NamedExpr, \
@@ -126,7 +126,10 @@ class ForwardVisitor(ast.NodeVisitor):
         return super().visit_Pass(node)
 
     def visit_Break(self, node: Break) -> Any:
-        control_operation = self.source_creator.call_stack[-2]
+        i = -1
+        control_operation = self.source_creator.call_stack[i]
+        while isinstance(control_operation, IfThenElseOperation):
+            control_operation = self.source_creator.call_stack[--i]
         control_operation.update_forward()
         self.source_creator.call_stack.append(control_operation)
 
@@ -407,7 +410,11 @@ class ForwardVisitor(ast.NodeVisitor):
     def execute(self):
         control_operation = self.source_creator.call_stack[-1]
         operation = control_operation.operations[control_operation.current[-1]]
-        self.visit(operation)
-        if control_operation == self.source_creator.call_stack[-1]:
-            control_operation.update_forward(self.source_creator.call_stack, self)
+        if isinstance(operation, CompositeOperation):
+            operation.initialize(self)
+            self.source_creator.call_stack.append(operation)
+        else:
+            self.visit(operation)
+            if control_operation == self.source_creator.call_stack[-1]:
+                control_operation.update_forward(self.source_creator.call_stack, self)
         print(operation)
