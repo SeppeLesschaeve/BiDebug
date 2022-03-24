@@ -455,7 +455,7 @@ def main(source_program):
         try:
             debugger.source_controller.execute()
         except Exception:
-            break
+            print(debugger.source_creator.call_stack[-1])
 
 
 if __name__ == '__main__':

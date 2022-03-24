@@ -56,9 +56,6 @@ class CompositeOperation(Operation):
             else:
                 self.current[-1] -= 1
 
-    def is_composite(self):
-        return True
-
     def is_forward_completed(self, forward):
         return True
 
@@ -155,7 +152,10 @@ class ForOperation(CompositeOperation):
         super(ForOperation, self).initialize(forward)
         self.index.append(0)
         self.iter.append(forward.evaluate(self.iterName))
-        self.get_source()[self.target] = self.iter[-1][self.index[-1]]
+        if self.target in self.get_source():
+            self.get_source()[self.target][-1] = self.iter[-1][self.index[-1]]
+        else:
+            self.get_source()[self.target] = [self.iter[-1][self.index[-1]]]
 
     def finalize(self):
         self.index.pop()
@@ -164,12 +164,12 @@ class ForOperation(CompositeOperation):
     def update_next(self):
         self.current[-1] = 0
         self.index[-1] += 1
-        self.get_source()[self.target] = self.iter[-1][self.index[-1]]
+        self.get_source()[self.target][-1] = self.iter[-1][self.index[-1]]
 
     def update_back(self):
         self.current[-1] = len(self.operations) - 1
         self.index[-1] -= 1
-        self.get_source()[self.target] = self.iter[-1][self.index[-1]]
+        self.get_source()[self.target][-1] = self.iter[-1][self.index[-1]]
 
 
 class FunctionOperation(CompositeOperation):
