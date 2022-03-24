@@ -19,15 +19,7 @@ class ForwardVisitor(ast.NodeVisitor):
     def evaluate(self, operand):
         if isinstance(operand, str):
             return self.source_creator.get_active_source(operand)[-1]
-        elif isinstance(operand, Call):
-            self.visit(operand)
-            operation = self.source_creator.call_stack[-1]
-            while not operation.is_forward_completed(self):
-                self.debugger.execute()
-            else:
-                self.source_creator.call_stack.append()
-        else:
-            return operand
+        return self.visit(operand)
 
     def visit(self, node: AST) -> Any:
         return super().visit(node)
@@ -54,13 +46,13 @@ class ForwardVisitor(ast.NodeVisitor):
         return super().visit_ClassDef(node)
 
     def visit_Return(self, node: Return) -> Any:
-        return self.visit(node.value)
+        self.source_creator.call_stack[-1].get_function().result = self.visit(node.value)
 
     def visit_Delete(self, node: Delete) -> Any:
         return super().visit_Delete(node)
 
     def visit_Assign(self, node: Assign) -> Any:
-        value = self.evaluate(self.visit(node.value))
+        value = self.evaluate(node.value)
         targets = []
         for target in node.targets:
             targets.append(self.visit(target))
@@ -150,7 +142,7 @@ class ForwardVisitor(ast.NodeVisitor):
         return super().visit_BoolOp(node)
 
     def visit_BinOp(self, node: BinOp) -> Any:
-        return self.visit(node.op)(self.evaluate(self.visit(node.left)), self.evaluate(self.visit(node.right)))
+        return self.visit(node.op)(self.evaluate(node.left), self.evaluate(node.right))
 
     def visit_UnaryOp(self, node: UnaryOp) -> Any:
         return super().visit_UnaryOp(node)
@@ -189,28 +181,35 @@ class ForwardVisitor(ast.NodeVisitor):
         return super().visit_YieldFrom(node)
 
     def visit_Compare(self, node: Compare) -> Any:
-        comparators = [self.evaluate(self.visit(node.left))]
+        comparators = [self.evaluate(node.left)]
         for comparator in node.comparators:
-            comparators.append(self.evaluate(self.visit(comparator)))
+            comparators.append(self.evaluate(comparator))
         comparisons = []
         for comparison in node.ops:
             comparisons.append(comparison)
         value = True
         for i in range(len(comparisons)):
-            value = value and self.visit(comparisons[i])(self.evaluate(comparators[i]), self.evaluate(comparators[i+1]))
+            value = value and self.visit(comparisons[i])(comparators[i], comparators[i+1])
         return value
 
     def visit_Call(self, node: Call) -> Any:
         operation = self.source_creator.functions[self.visit(node.func)]
         args = []
         for argument in node.args:
-            args.append(self.evaluate(self.visit(argument)))
+            args.append(self.evaluate(argument))
         source = {}
         for i in range(len(args)):
             source[operation.arguments[i]] = [args[i]]
-        operation.source.append(source)
         self.source_creator.call_stack.append(operation)
         operation.initialize(self)
+        operation.source.insert(operation.index, source)
+        while not operation.is_forward_completed():
+            self.debugger.execute()
+        else:
+            result = operation.result
+            operation.result = None
+            operation.index -= 1
+        return result
 
     def visit_FormattedValue(self, node: FormattedValue) -> Any:
         return super().visit_FormattedValue(node)

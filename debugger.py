@@ -469,7 +469,7 @@ def div(d1, d2):
     return d1 / d2
 
 
-def main():
+def main(b):
     for x in ll:
         i = 0
         while x > 4:
@@ -484,6 +484,6 @@ def main():
             a += 1
 
 
-main()   
+main(2)   
 """
     main(input_program)

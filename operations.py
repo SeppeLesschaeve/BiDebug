@@ -77,6 +77,9 @@ class CompositeOperation(Operation):
     def get_source(self):
         return self.parent_operation.get_source()
 
+    def get_function(self):
+        return self.parent_operation.get_function()
+
 
 class IfThenElseOperation(CompositeOperation):
 
@@ -178,10 +181,19 @@ class FunctionOperation(CompositeOperation):
         self.name = name
         self.arguments = arguments
         self.source = []
+        self.result = None
+        self.index = -1
         CompositeOperation.__init__(self)
 
+    def initialize(self, forward):
+        self.index += 1
+
     def finalize(self):
-        self.arguments.pop()
+        self.arguments.pop(self.index)
+        self.index -= 1
 
     def get_source(self):
-        return self.source[-1]
+        return self.source[self.index]
+
+    def get_function(self):
+        return self
