@@ -385,12 +385,11 @@ class BackwardVisitor(ast.NodeVisitor):
         self.source_creator = source_creator
 
     def execute(self):
-        control_operation = self.source_creator.call_stack[-1]
-        control_operation.update_backward(self.source_creator.call_stack)
-        operation = control_operation.operations[control_operation.current[-1]]
-        if isinstance(operation, CompositeOperation):
-            self.source_creator.call_stack.pop()
-        control_operation = self.source_creator.call_stack[-1]
-        operation = control_operation.operations[control_operation.current[-1]]
-        self.visit(operation)
-        print(operation)
+        control_operation = self.source_creator.get_control_function()
+        if control_operation.operation == control_operation.get_first_operation:
+            self.source_creator.pop()
+        else:
+            control_operation.update_backward()
+        control_operation = self.source_creator.get_control_function()
+        self.visit(control_operation.operation)
+        print(control_operation.operation)

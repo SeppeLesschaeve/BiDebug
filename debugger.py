@@ -387,6 +387,7 @@ class SourceCreator(ast.NodeVisitor):
         self.functions = {}
         self.tree = None
         self.call_stack = None
+        self.index = -1
         self.build_tree(text)
         self.initialize_stack()
 
@@ -396,7 +397,7 @@ class SourceCreator(ast.NodeVisitor):
         print(self.functions)
 
     def get_active_source(self, reference):
-        source = self.call_stack[-1].get_source()
+        source = self.get_control_function().get_source()
         if reference in source:
             return source[reference]
         else:
@@ -404,12 +405,27 @@ class SourceCreator(ast.NodeVisitor):
             if reference in source:
                 return source[reference]
             else:
-                return self.call_stack[-1].get_source()
+                return self.get_control_function().get_source()
 
     def initialize_stack(self):
         call_stack = deque()
         call_stack.append(self.functions['boot'])
         self.call_stack = call_stack
+        self.index = 0
+
+    def get_control_function(self):
+        return self.call_stack[self.index]
+
+    def insert(self, operation):
+        self.call_stack.insert(self.index, operation)
+        self.index += 1
+
+    def go_back(self):
+        self.index -= 1
+
+    def pop(self):
+        self.call_stack.pop(self.index)
+        self.index -= 1
 
 
 class SourceController:
@@ -417,7 +433,7 @@ class SourceController:
     def __init__(self, source_creator):
         self.forward_visitor = ForwardVisitor(source_creator)
         self.reverse_visitor = BackwardVisitor(source_creator)
-        source_creator.call_stack[-1].initialize(self.forward_visitor)
+        source_creator.get_control_function().initialize(self.forward_visitor)
 
     def set_debugger(self, debugger):
         self.forward_visitor.debugger = debugger
@@ -455,7 +471,7 @@ def main(source_program):
         try:
             debugger.source_controller.execute()
         except Exception:
-            print(debugger.source_creator.call_stack[-1])
+            print(debugger.source_creator.get_control_function())
 
 
 if __name__ == '__main__':

@@ -22,6 +22,9 @@ class Operation:
     def __init__(self):
         self.parent_operation = None
 
+    def get_last_performed(self):
+        return self
+
 
 class CompositeOperation(Operation):
 
@@ -30,31 +33,11 @@ class CompositeOperation(Operation):
         self.operations = []
         self.current = []
 
-    def current_operation(self, current):
-        return self.operations[current]
+    def get_operation(self):
+        return self.operations[self.current[-1]]
 
-    def update_forward(self, call_stack, forward):
-        if self.current[-1] == len(self.operations) - 1:
-            if self.is_forward_completed(forward):
-                parent = self.parent_operation
-                if parent:
-                    call_stack.append(parent)
-                    if parent.current[-1] < len(parent.operations) - 1:
-                        parent.current[-1] += 1
-            else:
-                self.update_next()
-        else:
-            self.current[-1] += 1
-
-    def update_backward(self, call_stack):
-        if self.current[-1] == 0 and self.is_backward_completed():
-            self.finalize()
-            call_stack.pop()
-        else:
-            if self.current[-1] == 0:
-                self.update_back()
-            else:
-                self.current[-1] -= 1
+    def get_last_operation(self):
+        return self.operations[len(self.operations) - 1]
 
     def is_forward_completed(self, forward):
         return True
@@ -64,6 +47,7 @@ class CompositeOperation(Operation):
 
     def initialize(self, forward):
         self.current.append(0)
+        return True
 
     def finalize(self):
         return
@@ -80,6 +64,9 @@ class CompositeOperation(Operation):
     def get_function(self):
         return self.parent_operation.get_function()
 
+    def get_last_performed(self):
+        return self.get_operation().get_last_performed()
+
 
 class IfThenElseOperation(CompositeOperation):
 
@@ -88,11 +75,11 @@ class IfThenElseOperation(CompositeOperation):
         self.choices_stack = []
         CompositeOperation.__init__(self)
 
-    def current_operation(self, current):
+    def get_operation(self):
         if self.choices_stack[-1] == 1:
-            return self.operations[0][current]
+            return self.operations[0][self.current[-1]]
         else:
-            return self.operations[1][current]
+            return self.operations[1][self.current[-1]]
 
     def initialize(self, forward):
         super(IfThenElseOperation, self).initialize(forward)
@@ -122,7 +109,7 @@ class WhileOperation(CompositeOperation):
         super(WhileOperation, self).initialize(forward)
         self.number.append(0)
         if not forward.visit(self.test):
-            self.current[-1] = len(self.operations) - 1
+            return False
 
     def finalize(self):
         self.number.pop()
@@ -159,6 +146,7 @@ class ForOperation(CompositeOperation):
             self.get_source()[self.target][-1] = self.iter[-1][self.index[-1]]
         else:
             self.get_source()[self.target] = [self.iter[-1][self.index[-1]]]
+        return True
 
     def finalize(self):
         self.index.pop()
@@ -181,12 +169,18 @@ class FunctionOperation(CompositeOperation):
         self.name = name
         self.arguments = arguments
         self.source = []
-        self.result = None
         self.index = -1
+        self.operation = None
         CompositeOperation.__init__(self)
 
+    def is_forward_completed(self, forward):
+        return 'return' in self.get_source()
+
     def initialize(self, forward):
+        super(FunctionOperation, self).initialize(forward)
         self.index += 1
+        self.update_operation(self)
+        return True
 
     def finalize(self):
         self.arguments.pop(self.index)
@@ -197,3 +191,59 @@ class FunctionOperation(CompositeOperation):
 
     def get_function(self):
         return self
+
+    def get_result(self):
+        return self.get_source()['return']
+
+    def remove_result(self):
+        self.get_source().pop('return')
+
+    def update_operation(self, parent):
+        self.operation = parent.operations[parent.current[-1]]
+
+    def next_normal(self, parent):
+        parent.current[-1] += 1
+        self.update_operation(parent)
+
+    def next_not_normal(self, parent):
+        parent.update_next()
+        self.update_operation(parent)
+
+    def prev_normal(self, parent):
+        parent.current[-1] -= 1
+        self.update_operation(parent)
+        if isinstance(self.operation, CompositeOperation):
+            self.operation = self.operation.get_last_performed()
+
+    def prev_not_normal(self, parent):
+        parent.update_back()
+        self.update_operation(parent)
+        if isinstance(self.operation, CompositeOperation):
+            self.operation = self.operation.get_last_performed()
+
+    def update_forward(self, forward):
+        parent = self.operation.parent_operation
+        if self.operation == parent.get_last_operation():
+            if parent.is_forward_completed(forward):
+                while parent.is_forward_completed(forward):
+                    parent = parent.parent_operation
+                else:
+                    self.next_normal(parent)
+            else:
+                self.next_not_normal(parent)
+        else:
+            self.next_normal(parent)
+
+    def update_backward(self):
+        parent = self.operation.parent_operation
+        if self.operation == parent.get_first_operation():
+            if parent.is_backward_completed():
+                while parent.is_backward_completed():
+                    parent.finalize()
+                    parent = parent.parent_operation
+                else:
+                    self.prev_normal(parent)
+            else:
+                self.prev_not_normal(parent)
+        else:
+            self.prev_normal(parent)

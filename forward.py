@@ -19,6 +19,8 @@ class ForwardVisitor(ast.NodeVisitor):
     def evaluate(self, operand):
         if isinstance(operand, str):
             return self.source_creator.get_active_source(operand)[-1]
+        elif isinstance(operand, Name):
+            return self.source_creator.get_active_source(self.visit(operand))[-1]
         return self.visit(operand)
 
     def visit(self, node: AST) -> Any:
@@ -46,7 +48,7 @@ class ForwardVisitor(ast.NodeVisitor):
         return super().visit_ClassDef(node)
 
     def visit_Return(self, node: Return) -> Any:
-        self.source_creator.call_stack[-1].get_function().result = self.visit(node.value)
+        self.source_creator.get_control_function()['return'] = self.visit(node.value)
 
     def visit_Delete(self, node: Delete) -> Any:
         return super().visit_Delete(node)
@@ -200,15 +202,15 @@ class ForwardVisitor(ast.NodeVisitor):
         source = {}
         for i in range(len(args)):
             source[operation.arguments[i]] = [args[i]]
-        self.source_creator.call_stack.append(operation)
+        self.source_creator.insert(operation)
         operation.initialize(self)
         operation.source.insert(operation.index, source)
-        while not operation.is_forward_completed():
+        while not operation.is_forward_completed(self):
             self.debugger.execute()
         else:
-            result = operation.result
-            operation.result = None
-            operation.index -= 1
+            result = operation.get_result()
+            operation.remove_result()
+            self.source_creator.go_back()
         return result
 
     def visit_FormattedValue(self, node: FormattedValue) -> Any:
@@ -407,13 +409,13 @@ class ForwardVisitor(ast.NodeVisitor):
         self.source_creator = source_creator
 
     def execute(self):
-        control_operation = self.source_creator.call_stack[-1]
-        operation = control_operation.operations[control_operation.current[-1]]
+        operation = self.source_creator.get_control_function().operation
         if isinstance(operation, CompositeOperation):
-            operation.initialize(self)
-            self.source_creator.call_stack.append(operation)
+            if not operation.initialize(self):
+                self.source_creator.get_control_function().update_forward(self)
+            else:
+                self.source_creator.get_control_function().operation = operation.get_operation()
         else:
             self.visit(operation)
-            if control_operation == self.source_creator.call_stack[-1]:
-                control_operation.update_forward(self.source_creator.call_stack, self)
+            self.source_creator.get_control_function().update_forward(self)
         print(operation)
