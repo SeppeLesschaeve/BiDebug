@@ -417,8 +417,8 @@ class SourceCreator(ast.NodeVisitor):
         return self.call_stack[self.index]
 
     def insert(self, operation):
-        self.call_stack.insert(self.index, operation)
         self.index += 1
+        self.call_stack.insert(self.index, operation)
 
     def go_back(self):
         self.index -= 1

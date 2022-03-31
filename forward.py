@@ -48,7 +48,7 @@ class ForwardVisitor(ast.NodeVisitor):
         return super().visit_ClassDef(node)
 
     def visit_Return(self, node: Return) -> Any:
-        self.source_creator.get_control_function()['return'] = self.visit(node.value)
+        self.source_creator.get_control_function().get_source()['return'] = self.visit(node.value)
 
     def visit_Delete(self, node: Delete) -> Any:
         return super().visit_Delete(node)
@@ -108,7 +108,7 @@ class ForwardVisitor(ast.NodeVisitor):
         return super().visit_ImportFrom(node)
 
     def visit_Global(self, node: Global) -> Any:
-        return super().visit_Global(node)
+        return
 
     def visit_Nonlocal(self, node: Nonlocal) -> Any:
         return super().visit_Nonlocal(node)
