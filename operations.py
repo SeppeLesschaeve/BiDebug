@@ -50,6 +50,9 @@ class CompositeOperation(Operation):
         if self.current[-1] > 0:
             self.current[-1] -= 1
 
+    def is_last(self):
+        return self.current[-1] == len(self.operations) - 1
+
     def is_forward_completed(self, forward):
         return True
 
@@ -166,7 +169,7 @@ class ForOperation(CompositeOperation):
         self.index.append(0)
         self.iter.append(forward.evaluate(self.iterName))
         if self.target in self.get_source():
-            self.get_source()[self.target][-1] = self.iter[-1][self.index[-1]]
+            self.get_source()[self.target].append(self.iter[-1][self.index[-1]])
         else:
             self.get_source()[self.target] = [self.iter[-1][self.index[-1]]]
         return True
@@ -221,44 +224,49 @@ class FunctionOperation(CompositeOperation):
     def remove_result(self):
         self.get_source().pop('return')
 
+    def is_last(self):
+        if self.operation.parent_operation == self:
+            return super(FunctionOperation, self).is_last()
+        return self.operation.parent_operation.is_last()
+
     def update_operation(self, parent):
         self.operation = parent.get_operation()
 
-    def next_normal(self, parent):
-        parent.increment_current()
+    def next(self, parent):
+        if isinstance(parent, ForOperation) or isinstance(parent, WhileOperation):
+            parent.update_next()
+        else:
+            parent.increment_current()
         self.update_operation(parent)
 
-    def next_not_normal(self, parent):
-        parent.update_next()
-        self.update_operation(parent)
-
-    def prev_normal(self, parent):
-        parent.decrement_current()
-        self.update_operation(parent)
-        if isinstance(self.operation, CompositeOperation):
-            self.operation = self.operation.get_last_performed()
-
-    def prev_not_normal(self, parent):
-        parent.update_back()
+    def prev(self, parent):
+        if isinstance(parent, ForOperation) or isinstance(parent, WhileOperation):
+            parent.update_back()
+        else:
+            parent.decrement_current()
         self.update_operation(parent)
         if isinstance(self.operation, CompositeOperation):
             self.operation = self.operation.get_last_performed()
 
     def update_forward(self, forward):
-        try:
-            parent = self.operation.parent_operation
-        except Exception:
-            parent = self
-        if self.operation == parent.get_last_operation():
-            if parent.is_forward_completed(forward):
-                while parent.is_forward_completed(forward) and parent.parent_operation:
-                    parent = parent.parent_operation
-                else:
-                    self.next_normal(parent)
+        parent = self.update_forward_parent(forward)
+        if parent:
+            parent.increment_current()
+            self.update_operation(parent)
+
+    def update_forward_parent(self, forward):
+        if self.is_last():
+            if isinstance(self.operation.parent_operation, FunctionOperation):
+                return self.operation.parent_operation
+            elif self.operation.parent_operation.is_forward_completed(forward):
+                self.operation = self.operation.parent_operation
+                return self.update_forward_parent(forward)
             else:
-                self.next_not_normal(parent)
+                self.operation.parent_operation.update_next()
+                self.update_operation(self.operation.parent_operation)
+                return None
         else:
-            self.next_normal(parent)
+            return self.operation.parent_operation
 
     def update_backward(self):
         try:
@@ -270,9 +278,4 @@ class FunctionOperation(CompositeOperation):
                 while parent.is_backward_completed() and parent.parent_operation:
                     parent.finalize()
                     parent = parent.parent_operation
-                else:
-                    self.prev_normal(parent)
-            else:
-                self.prev_not_normal(parent)
-        else:
-            self.prev_normal(parent)
+        self.prev(parent)

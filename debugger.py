@@ -24,6 +24,8 @@ class SourceCreator(ast.NodeVisitor):
                 boot_part.append(self.visit(program))
             else:
                 self.visit(program)
+        for statement in boot_part:
+            statement.parent_operation = boot
         boot.operations = boot_part
         boot.source.append({})
         self.functions['boot'] = boot
@@ -478,7 +480,7 @@ if __name__ == '__main__':
     input_program = """
 a = 1
 b = 2
-ll = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+ll = [0, 9]
 
 
 def div(d1, d2):
@@ -498,7 +500,7 @@ def main(b):
         else:
             global a
             a += 1
-
+    return
 
 main(2)   
 """

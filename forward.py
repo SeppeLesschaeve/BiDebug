@@ -48,7 +48,10 @@ class ForwardVisitor(ast.NodeVisitor):
         return super().visit_ClassDef(node)
 
     def visit_Return(self, node: Return) -> Any:
-        self.source_creator.get_control_function().get_source()['return'] = self.visit(node.value)
+        if not node.value:
+            self.source_creator.get_control_function().get_source()['return'] = None
+        else:
+            self.source_creator.get_control_function().get_source()['return'] = self.visit(node.value)
 
     def visit_Delete(self, node: Delete) -> Any:
         return super().visit_Delete(node)
@@ -120,12 +123,13 @@ class ForwardVisitor(ast.NodeVisitor):
         return super().visit_Pass(node)
 
     def visit_Break(self, node: Break) -> Any:
-        i = -1
-        control_operation = self.source_creator.call_stack[i]
+        operation = self.source_creator.get_control_function().operation
+        control_operation = operation.parent_operation
         while isinstance(control_operation, IfThenElseOperation):
-            control_operation = self.source_creator.call_stack[--i]
-        control_operation.update_forward()
-        self.source_creator.call_stack.append(control_operation)
+            control_operation = control_operation.parent_operation
+        control_operation.parent_operation.increment_current()
+        self.source_creator.get_control_function().update_operation(control_operation.parent_operation)
+        raise Exception
 
     def visit_Continue(self, node: Continue) -> Any:
         return super().visit_Continue(node)
@@ -416,6 +420,10 @@ class ForwardVisitor(ast.NodeVisitor):
             else:
                 self.source_creator.get_control_function().operation = operation.get_operation()
         else:
-            self.visit(operation)
-            self.source_creator.get_control_function().update_forward(self)
+            try:
+                self.visit(operation)
+                self.source_creator.get_control_function().update_forward(self)
+            except:
+                print('Break')
+                print(operation)
         print(operation)
