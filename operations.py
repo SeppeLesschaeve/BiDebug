@@ -1,3 +1,6 @@
+from binop_state import StartBinOpState
+from call_state import StartCallState
+
 add = lambda a, b: a + b
 sub = lambda a, b: a - b
 mul = lambda a, b: a * b
@@ -22,8 +25,164 @@ class Operation:
     def __init__(self):
         self.parent_operation = None
 
-    def get_last_performed(self):
-        return self
+    def is_forward_completed(self, forward):
+        return True
+
+
+class ReturnOperation(Operation):
+
+    def __init__(self, value):
+        self.eval = None
+        self.value = value
+        Operation.__init__(self)
+
+    def evaluate(self, evaluator):
+        evaluator.evaluate_return(self)
+
+
+class SliceOperation(Operation):
+
+    def __init__(self, lower, higher, step):
+        self.eval = None
+        self.lower = lower
+        self.higher = higher
+        self.step = step
+        Operation.__init__(self)
+
+    def evaluate(self, evaluator):
+        evaluator.evaluate_slice(self)
+
+    def set_elements(self):
+        self.eval = []
+        while self.lower.eval < self.higher.eval:
+            self.eval.append(self.lower.eval)
+            self.lower.eval += self.step.eval
+
+
+class SubscriptOperation(Operation):
+
+    def __init__(self, slice, value):
+        self.eval = None
+        self.slice = slice
+        self.value = value
+        Operation.__init__(self)
+
+    def evaluate(self, evaluator):
+        evaluator.evaluate_subscript(self)
+
+    def set_elements(self):
+        self.eval = []
+        for v in self.slice.eval:
+            self.eval.append(self.value.eval[v])
+
+
+class CompareOperation(Operation):
+
+    def __init__(self, left, comparators, comparisons):
+        self.eval = None
+        self.left = left
+        self.comparators = comparators
+        self.comparisons = comparisons
+        Operation.__init__(self)
+
+    def evaluate(self, evaluator):
+        evaluator.evaluate_compare(self)
+
+
+class ListOperation(Operation):
+
+    def __init__(self, elts):
+        self.eval = None
+        self.elts = elts
+        Operation.__init__(self)
+
+    def evaluate(self, evaluator):
+        evaluator.evaluate_list(self)
+
+
+class GlobalOperation(Operation):
+
+    def __init__(self):
+        Operation.__init__(self)
+
+    def evaluate(self, evaluator):
+        return
+
+
+class BreakOperation(Operation):
+
+    def __init__(self):
+        Operation.__init__(self)
+
+    def evaluate(self, evaluator):
+        evaluator.evaluate_break(self)
+
+
+class CallOperation(Operation):
+
+    def __init__(self, function, args):
+        self.function = function
+        self.args = args
+        self.state = StartCallState(self)
+        Operation.__init__(self)
+
+    def evaluate(self, evaluator):
+        self.state.evaluate()
+
+
+class BinaryOperation(Operation):
+
+    def __init__(self, left, right, operation):
+        self.left = left
+        self.right = right
+        self.operation = operation
+        self.state = StartBinOpState(self)
+        Operation.__init__(self)
+
+    def evaluate(self, evaluator):
+        self.state.evaluate()
+
+class AssignOperation(Operation):
+
+    def __init__(self, value, targets):
+        self.eval = None
+        self.value = value
+        self.targets = targets
+        Operation.__init__(self)
+
+    def evaluate(self, evaluator):
+        self.value.evaluate(evaluator)
+        self.eval = self.value.eval
+        evaluator.evaluate_assign(self)
+
+
+class AugAssignOperation(Operation):
+
+    def __init__(self, value):
+        self.value = value
+        self.target = None
+        Operation.__init__(self)
+
+
+class ReferenceOperation(Operation):
+
+    def __init__(self, ref):
+        self.eval = None
+        self.ref = ref
+        Operation.__init__(self)
+
+    def evaluate(self, evaluator):
+        evaluator.evaluate_name(self)
+
+
+class ConstantOperation(Operation):
+
+    def __init__(self, value):
+        self.value = value
+        Operation.__init__(self)
+
+    def evaluate(self, evaluator):
+        evaluator.evaluate_constant(self)
 
 
 class CompositeOperation(Operation):
@@ -36,12 +195,6 @@ class CompositeOperation(Operation):
     def get_operation(self):
         return self.operations[self.current[-1]]
 
-    def get_last_operation(self):
-        return self.operations[len(self.operations) - 1]
-
-    def get_first_operation(self):
-        return self.operations[0]
-
     def increment_current(self):
         if self.current[-1] < len(self.operations) - 1:
             self.current[-1] += 1
@@ -53,8 +206,8 @@ class CompositeOperation(Operation):
     def is_last(self):
         return self.current[-1] == len(self.operations) - 1
 
-    def is_forward_completed(self, forward):
-        return True
+    def is_first(self):
+        return self.current[-1] == 0
 
     def is_backward_completed(self):
         return True
@@ -64,6 +217,7 @@ class CompositeOperation(Operation):
         return True
 
     def finalize(self):
+        self.current.pop()
         return
 
     def update_next(self):
@@ -75,17 +229,11 @@ class CompositeOperation(Operation):
     def get_source(self):
         return self.parent_operation.get_source()
 
-    def get_function(self):
-        return self.parent_operation.get_function()
-
-    def get_last_performed(self):
-        return self.get_operation().get_last_performed()
-
 
 class IfThenElseOperation(CompositeOperation):
 
-    def __init__(self):
-        self.test = None
+    def __init__(self, test):
+        self.test = test
         self.choices_stack = []
         CompositeOperation.__init__(self)
 
@@ -94,18 +242,6 @@ class IfThenElseOperation(CompositeOperation):
             return self.operations[0][self.current[-1]]
         else:
             return self.operations[1][self.current[-1]]
-
-    def get_first_operation(self):
-        if self.choices_stack[-1] == 1:
-            return self.operations[0][0]
-        else:
-            return self.operations[1][0]
-
-    def get_last_operation(self):
-        if self.choices_stack[-1] == 1:
-            return self.operations[0][len(self.operations) - 1]
-        else:
-            return self.operations[1][len(self.operations) - 1]
 
     def initialize(self, forward):
         super(IfThenElseOperation, self).initialize(forward)
@@ -116,13 +252,14 @@ class IfThenElseOperation(CompositeOperation):
         return True
 
     def finalize(self):
+        super(IfThenElseOperation, self).finalize()
         self.choices_stack.pop()
 
 
 class WhileOperation(CompositeOperation):
 
-    def __init__(self):
-        self.test = None
+    def __init__(self, test):
+        self.test = test
         self.number = []
         CompositeOperation.__init__(self)
 
@@ -138,6 +275,7 @@ class WhileOperation(CompositeOperation):
         return forward.visit(self.test)
 
     def finalize(self):
+        super(WhileOperation, self).finalize()
         self.number.pop()
 
     def update_next(self):
@@ -175,18 +313,19 @@ class ForOperation(CompositeOperation):
         return True
 
     def finalize(self):
+        super(ForOperation, self).finalize()
         self.index.pop()
         self.iter.pop()
 
     def update_next(self):
         self.current[-1] = 0
         self.index[-1] += 1
-        self.get_source()[self.target][-1] = self.iter[-1][self.index[-1]]
+        self.get_source()[self.target].append(self.iter[-1][self.index[-1]])
 
     def update_back(self):
         self.current[-1] = len(self.operations) - 1
         self.index[-1] -= 1
-        self.get_source()[self.target][-1] = self.iter[-1][self.index[-1]]
+        self.get_source()[self.target].pop()
 
 
 class FunctionOperation(CompositeOperation):
@@ -199,7 +338,12 @@ class FunctionOperation(CompositeOperation):
         self.operation = None
         CompositeOperation.__init__(self)
 
+    def add(self, target, key):
+        self.get_source()[target] = [key]
+
     def is_forward_completed(self, forward):
+        if len(self.source) == 0:
+            return False
         return 'return' in self.get_source()
 
     def initialize(self, forward):
@@ -209,14 +353,12 @@ class FunctionOperation(CompositeOperation):
         return True
 
     def finalize(self):
-        self.arguments.pop(self.index)
+        super(FunctionOperation, self).finalize()
+        self.source.pop(self.index)
         self.index -= 1
 
     def get_source(self):
         return self.source[self.index]
-
-    def get_function(self):
-        return self
 
     def get_result(self):
         return self.get_source()['return']
@@ -232,22 +374,6 @@ class FunctionOperation(CompositeOperation):
     def update_operation(self, parent):
         self.operation = parent.get_operation()
 
-    def next(self, parent):
-        if isinstance(parent, ForOperation) or isinstance(parent, WhileOperation):
-            parent.update_next()
-        else:
-            parent.increment_current()
-        self.update_operation(parent)
-
-    def prev(self, parent):
-        if isinstance(parent, ForOperation) or isinstance(parent, WhileOperation):
-            parent.update_back()
-        else:
-            parent.decrement_current()
-        self.update_operation(parent)
-        if isinstance(self.operation, CompositeOperation):
-            self.operation = self.operation.get_last_performed()
-
     def update_forward(self, forward):
         parent = self.update_forward_parent(forward)
         if parent:
@@ -255,7 +381,7 @@ class FunctionOperation(CompositeOperation):
             self.update_operation(parent)
 
     def update_forward_parent(self, forward):
-        if self.is_last():
+        if self.operation.parent_operation.is_last():
             if isinstance(self.operation.parent_operation, FunctionOperation):
                 return self.operation.parent_operation
             elif self.operation.parent_operation.is_forward_completed(forward):
@@ -269,13 +395,22 @@ class FunctionOperation(CompositeOperation):
             return self.operation.parent_operation
 
     def update_backward(self):
-        try:
-            parent = self.operation.parent_operation
-        except Exception:
-            parent = self
-        if self.operation == parent.get_first_operation():
-            if parent.is_backward_completed():
-                while parent.is_backward_completed() and parent.parent_operation:
-                    parent.finalize()
-                    parent = parent.parent_operation
-        self.prev(parent)
+        parent = self.update_backward_parent()
+        if parent:
+            parent.decrement_current()
+            self.update_operation(parent)
+
+    def update_backward_parent(self):
+        if not self.operation.parent_operation:
+            return None
+        if self.operation.parent_operation.is_first():
+            if self.operation.parent_operation.is_backward_completed():
+                self.operation.parent_operation.finalize()
+                self.operation = self.operation.parent_operation
+                return self.update_backward_parent()
+            else:
+                self.operation.parent_operation.update_back()
+                self.update_operation(self.operation.parent_operation)
+                return None
+        else:
+            return self.operation.parent_operation

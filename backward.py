@@ -13,6 +13,13 @@ from ast import NameConstant, Bytes, Str, Num, Param, AugStore, AugLoad, Suite, 
 from collections import deque
 from typing import Any
 
+
+class BackwardException(Exception):
+
+    def __init__(self):
+        super().__init__('Back to the past')
+
+
 class BackwardVisitor(ast.NodeVisitor):
 
     def evaluate(self, operand):
@@ -50,7 +57,7 @@ class BackwardVisitor(ast.NodeVisitor):
         return super().visit_ClassDef(node)
 
     def visit_Return(self, node: Return) -> Any:
-        return self.visit(node.value)
+        return
 
     def visit_Delete(self, node: Delete) -> Any:
         return super().visit_Delete(node)
@@ -187,7 +194,7 @@ class BackwardVisitor(ast.NodeVisitor):
         return value
 
     def visit_Call(self, node: Call) -> Any:
-        return super().visit_Call(node)
+        return
 
     def visit_FormattedValue(self, node: FormattedValue) -> Any:
         return super().visit_FormattedValue(node)
@@ -385,11 +392,15 @@ class BackwardVisitor(ast.NodeVisitor):
         self.source_creator = source_creator
 
     def execute(self):
-        control_operation = self.source_creator.get_control_function()
-        if control_operation.operation == control_operation.get_first_operation:
+        funct = self.source_creator.get_control_function()
+        funct.update_backward()
+        if funct.operation == funct:
             self.source_creator.pop()
-        else:
-            control_operation.update_backward()
-        control_operation = self.source_creator.get_control_function()
-        self.visit(control_operation.operation)
-        print(control_operation.operation)
+            raise
+        operation = self.source_creator.get_control_function().operation
+        while isinstance(operation, CompositeOperation) and not operation.is_backward_completed():
+            self.source_creator.get_control_function().operation = operation.get_operation()
+            operation = self.source_creator.get_control_function().operation
+        if not isinstance(operation, CompositeOperation):
+            self.visit(operation)
+        print(operation)

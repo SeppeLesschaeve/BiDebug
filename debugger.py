@@ -1,5 +1,8 @@
 import ast
-from operations import WhileOperation, FunctionOperation, IfThenElseOperation, ForOperation, CompositeOperation
+
+from evaluation import Evaluator
+from operations import WhileOperation, FunctionOperation, IfThenElseOperation, ForOperation, CompositeOperation, \
+    AssignOperation, AugAssignOperation, BinaryOperation, ReferenceOperation, ConstantOperation
 from forward import ForwardVisitor
 from backward import BackwardVisitor
 from _ast import withitem, alias, keyword, arg, arguments, ExceptHandler, comprehension, NotIn, NotEq, LtE, Lt, IsNot, \
@@ -56,10 +59,16 @@ class SourceCreator(ast.NodeVisitor):
         return node
 
     def visit_Assign(self, node: Assign) -> Any:
-        return node
+        targets = []
+        for target in node.targets:
+            targets.append(self.visit(target))
+        assign_operation = AssignOperation(self.visit(node.value), targets)
+        return assign_operation
 
     def visit_AugAssign(self, node: AugAssign) -> Any:
-        return node
+        augassign_operation = AugAssignOperation(self.visit(node.value))
+        augassign_operation.target = self.visit(node.target)
+        return augassign_operation
 
     def visit_AnnAssign(self, node: AnnAssign) -> Any:
         return node
@@ -80,8 +89,7 @@ class SourceCreator(ast.NodeVisitor):
         return node
 
     def visit_While(self, node: While) -> Any:
-        while_operation = WhileOperation()
-        while_operation.test = node.test
+        while_operation = WhileOperation(self.visit(node.test))
         operations = []
         for statement in node.body:
             operations.append(self.visit(statement))
@@ -91,8 +99,7 @@ class SourceCreator(ast.NodeVisitor):
         return while_operation
 
     def visit_If(self, node: If) -> Any:
-        if_then_else_operation = IfThenElseOperation()
-        if_then_else_operation.test = node.test
+        if_then_else_operation = IfThenElseOperation(self.visit(node.test))
         operations = []
         then_operations = []
         for statement in node.body:
@@ -155,7 +162,7 @@ class SourceCreator(ast.NodeVisitor):
         return node
 
     def visit_BinOp(self, node: BinOp) -> Any:
-        return node
+        return BinaryOperation(self.visit(node.left), self.visit(node.right), self.visit(node.op))
 
     def visit_UnaryOp(self, node: UnaryOp) -> Any:
         return node
@@ -212,7 +219,7 @@ class SourceCreator(ast.NodeVisitor):
         return node
 
     def visit_Constant(self, node: Constant) -> Any:
-        return node
+        return ConstantOperation(node.value)
 
     def visit_NamedExpr(self, node: NamedExpr) -> Any:
         return node
@@ -227,10 +234,13 @@ class SourceCreator(ast.NodeVisitor):
         return node
 
     def visit_Name(self, node: Name) -> Any:
-        return node.id
+        return ReferenceOperation(node.id)
 
     def visit_List(self, node: List) -> Any:
-        return node
+        elements = []
+        for el in node.elts:
+            elements.append(self.visit(el))
+        return elements
 
     def visit_Tuple(self, node: Tuple) -> Any:
         return node
@@ -392,6 +402,7 @@ class SourceCreator(ast.NodeVisitor):
         self.index = -1
         self.build_tree(text)
         self.initialize_stack()
+        self.values = {}
 
     def build_tree(self, text):
         self.tree = ast.parse(text)
@@ -401,17 +412,17 @@ class SourceCreator(ast.NodeVisitor):
     def get_active_source(self, reference):
         source = self.get_control_function().get_source()
         if reference in source:
-            return source[reference]
+            key = source[reference][-1]
+            return self.values[key]
         else:
             source = self.functions['boot'].source[0]
             if reference in source:
-                return source[reference]
+                return self.values[source[reference][-1]]
             else:
-                return self.get_control_function().get_source()
+                raise Exception
 
     def initialize_stack(self):
-        call_stack = deque()
-        call_stack.append(self.functions['boot'])
+        call_stack = [self.functions['boot']]
         self.call_stack = call_stack
         self.index = 0
 
@@ -428,6 +439,10 @@ class SourceCreator(ast.NodeVisitor):
     def pop(self):
         self.call_stack.pop(self.index)
         self.index -= 1
+
+    def add_value(self, value):
+        self.values[len(self.values)] = value
+        return len(self.values) - 1
 
 
 class SourceController:
@@ -456,12 +471,49 @@ class Debugger:
     def __init__(self, source_controller, source_creator):
         self.source_controller = source_controller
         self.source_creator = source_creator
+        self.evaluator = Evaluator(self.source_creator)
 
     def update(self, source):
         self.source_creator.update(source)
 
     def execute(self):
-        self.source_controller.execute()
+        number = int(input())
+        if number == 1:
+            self.execute_forward()
+        elif number == 2:
+            self.execute_backward()
+        else:
+            raise Exception
+
+    def execute_forward(self):
+        operation = self.source_creator.get_control_function().operation
+        if isinstance(operation, CompositeOperation):
+            if not operation.initialize(self):
+                self.source_creator.get_control_function().update_forward(self)
+            else:
+                self.source_creator.get_control_function().operation = operation.get_operation()
+        else:
+            try:
+                operation.evaluate(self.evaluator)
+                self.source_creator.get_control_function().update_forward(self)
+            except:
+                print('Break')
+                print(operation)
+        print(operation)
+
+    def execute_backward(self):
+        funct = self.source_creator.get_control_function()
+        funct.update_backward()
+        if funct.operation == funct:
+            self.source_creator.pop()
+            raise
+        operation = self.source_creator.get_control_function().operation
+        while isinstance(operation, CompositeOperation) and not operation.is_backward_completed():
+            self.source_creator.get_control_function().operation = operation.get_operation()
+            operation = self.source_creator.get_control_function().operation
+        if not isinstance(operation, CompositeOperation):
+            self.source_controller.backward_visitor.visit(operation)
+        print(operation)
 
 
 def main(source_program):
@@ -471,7 +523,7 @@ def main(source_program):
     debugger.source_controller.set_debugger(debugger)
     while True:
         try:
-            debugger.source_controller.execute()
+            debugger.execute()
         except Exception:
             print(debugger.source_creator.get_control_function())
 
@@ -479,7 +531,7 @@ def main(source_program):
 if __name__ == '__main__':
     input_program = """
 a = 1
-b = 2
+b = a
 ll = [0, 9]
 
 

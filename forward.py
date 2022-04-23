@@ -1,6 +1,7 @@
 import ast
 
 import operations
+from backward import BackwardException
 from operations import WhileOperation, FunctionOperation, IfThenElseOperation, ForOperation, CompositeOperation
 from _ast import withitem, alias, keyword, arg, arguments, ExceptHandler, comprehension, NotIn, NotEq, LtE, Lt, IsNot, \
     Is, In, GtE, Gt, Eq, USub, UAdd, Not, Invert, Sub, RShift, Pow, MatMult, Mult, Mod, LShift, FloorDiv, Div, BitXor, \
@@ -57,21 +58,29 @@ class ForwardVisitor(ast.NodeVisitor):
         return super().visit_Delete(node)
 
     def visit_Assign(self, node: Assign) -> Any:
-        value = self.evaluate(node.value)
+        try:
+            value = self.evaluate(node.value)
+        except BackwardException:
+            return
         targets = []
         for target in node.targets:
             targets.append(self.visit(target))
         for target in targets:
-            source = self.source_creator.get_active_source(target)
-            if isinstance(source, list):
+            try:
+                source = self.source_creator.get_active_source(target)
                 source.append(value)
-            else:
-                source[target] = [value]
+            except:
+                key = self.source_creator.add_value(value)
+                self.source_creator.get_control_function().add(target, key)
 
     def visit_AugAssign(self, node: AugAssign) -> Any:
+        try:
+            update_value = self.evaluate(node.value)
+        except BackwardException:
+            return
         target = self.visit(node.target)
         source = self.source_creator.get_active_source(target)
-        value = self.visit(node.op)(source[-1], self.evaluate(node.value))
+        value = self.visit(node.op)(source[-1], update_value)
         source[-1] = value
 
     def visit_AnnAssign(self, node: AnnAssign) -> Any:
@@ -214,7 +223,7 @@ class ForwardVisitor(ast.NodeVisitor):
         else:
             result = operation.get_result()
             operation.remove_result()
-            self.source_creator.go_back()
+            operation.go_back()
         return result
 
     def visit_FormattedValue(self, node: FormattedValue) -> Any:
