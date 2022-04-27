@@ -14,12 +14,6 @@ from collections import deque
 from typing import Any
 
 
-class BackwardException(Exception):
-
-    def __init__(self):
-        super().__init__('Back to the past')
-
-
 class BackwardVisitor(ast.NodeVisitor):
 
     def evaluate(self, operand):
