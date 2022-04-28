@@ -6,19 +6,19 @@ add = lambda a, b: a + b
 sub = lambda a, b: a - b
 mul = lambda a, b: a * b
 div = lambda a, b: a / b
-en = lambda a, b: a and b
-of = lambda a, b: a or b
-niet = lambda a: not a
-eq = lambda a, b: a == b
+enn = lambda a, b: a and b
+off = lambda a, b: a or b
+nit = lambda a: not a
+equ = lambda a, b: a == b
 neq = lambda a, b: a != b
-lt = lambda a, b: a < b
+lth = lambda a, b: a < b
 lte = lambda a, b: a <= b
-gt = lambda a, b: a > b
+gth = lambda a, b: a > b
 gte = lambda a, b: a >= b
 inn = lambda a, b: a in b
 nin = lambda a, b: a not in b
 iss = lambda a, b: a is b
-nis = lambda a, b: a is not b
+isn = lambda a, b: a is not b
 
 
 class BackwardException(Exception):
@@ -227,6 +227,27 @@ class BinaryOperation(ComplexOperation):
 
     def revert_evaluation(self):
         super(BinaryOperation, self).revert_evaluation()
+        if self.is_started():
+            self.eval.pop()
+
+    def get_value(self):
+        if self.is_ready():
+            return self.eval[0]
+        return None
+
+
+class BooleanOperation(ComplexOperation):
+
+    def __init__(self, op, operations):
+        self.op = op
+        self.eval = []
+        ComplexOperation.__init__(self, operations)
+
+    def finish_evaluation(self):
+        self.eval.append(self.op(self.operations[0].get_value(), self.operations[1].get_value()))
+
+    def revert_evaluation(self):
+        super(BooleanOperation, self).revert_evaluation()
         if self.is_started():
             self.eval.pop()
 
@@ -491,7 +512,7 @@ class ForOperation(ComplexOperation):
         return None
 
 
-class IfOperation(ComplexOperation):
+class IfThenElseOperation(ComplexOperation):
 
     def __init__(self, operations):
         self.choices = []
@@ -502,7 +523,7 @@ class IfOperation(ComplexOperation):
         self.index.append(0)
 
     def get_index(self):
-        if super(IfOperation, self).get_index() == 0:
+        if super(IfThenElseOperation, self).get_index() == 0:
             return 0
         else:
             return self.part_index[-1]

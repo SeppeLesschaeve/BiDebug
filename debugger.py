@@ -1,8 +1,10 @@
 import ast
 
+import operations
 from evaluation import Evaluator
-from operations import WhileOperation, FunctionOperation, IfThenElseOperation, ForOperation, CompositeOperation, \
-    AssignOperation, AugAssignOperation, BinaryOperation, ReferenceOperation, ConstantOperation
+from operations import BreakOperation, ConstantOperation, NameOperation, ReturnOperation, \
+    BinaryOperation, BooleanOperation, CompareOperation, SubscriptOperation, AugAssignOperation, AssignOperation, \
+    ListOperation, SetOperation, DictOperation, WhileOperation, ForOperation, IfThenElseOperation, FunctionOperation
 from forward import ForwardVisitor
 from backward import BackwardVisitor
 from _ast import withitem, alias, keyword, arg, arguments, ExceptHandler, comprehension, NotIn, NotEq, LtE, Lt, IsNot, \
@@ -53,7 +55,7 @@ class SourceCreator(ast.NodeVisitor):
         return node
 
     def visit_Return(self, node: Return) -> Any:
-        return node
+        return ReturnOperation([self.visit(node.value)])
 
     def visit_Delete(self, node: Delete) -> Any:
         return node
@@ -62,58 +64,51 @@ class SourceCreator(ast.NodeVisitor):
         targets = []
         for target in node.targets:
             targets.append(self.visit(target))
-        assign_operation = AssignOperation(self.visit(node.value), targets)
-        return assign_operation
+        return AssignOperation(targets, [self.visit(node.value)])
 
     def visit_AugAssign(self, node: AugAssign) -> Any:
-        augassign_operation = AugAssignOperation(self.visit(node.value))
-        augassign_operation.target = self.visit(node.target)
-        return augassign_operation
+        return AugAssignOperation(self.visit(node.target), [self.visit(node.value)])
 
     def visit_AnnAssign(self, node: AnnAssign) -> Any:
         return node
 
     def visit_For(self, node: For) -> Any:
-        for_operation = ForOperation()
-        for_operation.target = self.visit(node.target)
-        for_operation.iterName = self.visit(node.iter)
-        operations = []
+        target = Name(node.target).id
+        operations = [self.visit(node.iter)]
         for statement in node.body:
             operations.append(self.visit(statement))
+        for_operation = ForOperation(target, operations)
         for operation in operations:
             operation.parent_operation = for_operation
-        for_operation.operations = operations
         return for_operation
 
     def visit_AsyncFor(self, node: AsyncFor) -> Any:
         return node
 
     def visit_While(self, node: While) -> Any:
-        while_operation = WhileOperation(self.visit(node.test))
-        operations = []
+        operations = [self.visit(node.test)]
         for statement in node.body:
             operations.append(self.visit(statement))
+        while_operation = WhileOperation(operations)
         for operation in operations:
             operation.parent_operation = while_operation
-        while_operation.operations = operations
         return while_operation
 
     def visit_If(self, node: If) -> Any:
-        if_then_else_operation = IfThenElseOperation(self.visit(node.test))
-        operations = []
+        operations = [self.visit(node.test)]
         then_operations = []
         for statement in node.body:
             then_operations.append(self.visit(statement))
-        for operation in then_operations:
-            operation.parent_operation = if_then_else_operation
         else_operations = []
         for statement in node.orelse:
             else_operations.append(self.visit(statement))
-        for operation in else_operations:
-            operation.parent_operation = if_then_else_operation
         operations.append(then_operations)
         operations.append(else_operations)
-        if_then_else_operation.operations = operations
+        if_then_else_operation = IfThenElseOperation(operations)
+        for operation in then_operations:
+            operation.parent_operation = if_then_else_operation
+        for operation in else_operations:
+            operation.parent_operation = if_then_else_operation
         return if_then_else_operation
 
     def visit_With(self, node: With) -> Any:
@@ -150,7 +145,7 @@ class SourceCreator(ast.NodeVisitor):
         return node
 
     def visit_Break(self, node: Break) -> Any:
-        return node
+        return BreakOperation()
 
     def visit_Continue(self, node: Continue) -> Any:
         return node
@@ -159,10 +154,10 @@ class SourceCreator(ast.NodeVisitor):
         return node
 
     def visit_BoolOp(self, node: BoolOp) -> Any:
-        return node
+        return BooleanOperation(self.visit(node.op), [self.visit(node.values[0]), self.visit(node.values[1])])
 
     def visit_BinOp(self, node: BinOp) -> Any:
-        return BinaryOperation(self.visit(node.left), self.visit(node.right), self.visit(node.op))
+        return BinaryOperation(self.visit(node.op), [self.visit(node.left), self.visit(node.right)])
 
     def visit_UnaryOp(self, node: UnaryOp) -> Any:
         return node
@@ -171,19 +166,32 @@ class SourceCreator(ast.NodeVisitor):
         return node
 
     def visit_IfExp(self, node: IfExp) -> Any:
-        if_then_else_operation = IfThenElseOperation()
-        if_then_else_operation.test = node.test
-        operations = [[self.visit(node.body)], [self.visit(node.orelse)]]
-        for operation in operations:
+        operations = [self.visit(node.test)]
+        then_operations = [self.visit(node.body)]
+        else_operations = [self.visit(node.orelse)]
+        operations.append(then_operations)
+        operations.append(else_operations)
+        if_then_else_operation = IfThenElseOperation(operations)
+        for operation in then_operations:
             operation.parent_operation = if_then_else_operation
-        if_then_else_operation.operations = operations
+        for operation in else_operations:
+            operation.parent_operation = if_then_else_operation
         return if_then_else_operation
 
     def visit_Dict(self, node: Dict) -> Any:
-        return node
+        values = []
+        for el in node.values:
+            values.append(self.visit(el))
+        keys = []
+        for key in node.keys:
+            keys.append(Constant(key).value)
+        return DictOperation(keys, values)
 
     def visit_Set(self, node: Set) -> Any:
-        return node
+        elements = []
+        for el in node.elts:
+            elements.append(self.visit(el))
+        return SetOperation(elements)
 
     def visit_ListComp(self, node: ListComp) -> Any:
         return node
@@ -207,7 +215,13 @@ class SourceCreator(ast.NodeVisitor):
         return node
 
     def visit_Compare(self, node: Compare) -> Any:
-        return node
+        comparisons = []
+        for comparison in node.ops:
+            comparisons.append(self.visit(comparison))
+        opps = [self.visit(node.left)]
+        for opp in node.comparators:
+            opps.append(self.visit(opp))
+        return CompareOperation(comparisons, opps)
 
     def visit_Call(self, node: Call) -> Any:
         return node
@@ -228,19 +242,19 @@ class SourceCreator(ast.NodeVisitor):
         return node
 
     def visit_Subscript(self, node: Subscript) -> Any:
-        return node
+        return SubscriptOperation([self.visit(node.value), self.visit(node.slice)])
 
     def visit_Starred(self, node: Starred) -> Any:
         return node
 
     def visit_Name(self, node: Name) -> Any:
-        return ReferenceOperation(node.id)
+        return NameOperation(node.id)
 
     def visit_List(self, node: List) -> Any:
         elements = []
         for el in node.elts:
             elements.append(self.visit(el))
-        return elements
+        return ListOperation(elements)
 
     def visit_Tuple(self, node: Tuple) -> Any:
         return node
@@ -255,13 +269,13 @@ class SourceCreator(ast.NodeVisitor):
         return node
 
     def visit_And(self, node: And) -> Any:
-        return node
+        return operations.enn
 
     def visit_Or(self, node: Or) -> Any:
-        return node
+        return operations.off
 
     def visit_Add(self, node: Add) -> Any:
-        return node
+        return operations.add
 
     def visit_BitAnd(self, node: BitAnd) -> Any:
         return node
@@ -273,7 +287,7 @@ class SourceCreator(ast.NodeVisitor):
         return node
 
     def visit_Div(self, node: Div) -> Any:
-        return node
+        return operations.div
 
     def visit_FloorDiv(self, node: FloorDiv) -> Any:
         return node
@@ -285,7 +299,7 @@ class SourceCreator(ast.NodeVisitor):
         return node
 
     def visit_Mult(self, node: Mult) -> Any:
-        return node
+        return operations.mul
 
     def visit_MatMult(self, node: MatMult) -> Any:
         return node
@@ -297,13 +311,13 @@ class SourceCreator(ast.NodeVisitor):
         return node
 
     def visit_Sub(self, node: Sub) -> Any:
-        return node
+        return operations.sub
 
     def visit_Invert(self, node: Invert) -> Any:
         return node
 
     def visit_Not(self, node: Not) -> Any:
-        return node
+        return operations.nit
 
     def visit_UAdd(self, node: UAdd) -> Any:
         return node
@@ -312,34 +326,34 @@ class SourceCreator(ast.NodeVisitor):
         return node
 
     def visit_Eq(self, node: Eq) -> Any:
-        return node
+        return operations.equ
 
     def visit_Gt(self, node: Gt) -> Any:
-        return node
+        return operations.gth
 
     def visit_GtE(self, node: GtE) -> Any:
-        return node
+        return operations.gte
 
     def visit_In(self, node: In) -> Any:
-        return node
+        return operations.inn
 
     def visit_Is(self, node: Is) -> Any:
-        return node
+        return operations.iss
 
     def visit_IsNot(self, node: IsNot) -> Any:
-        return node
+        return operations.isn
 
     def visit_Lt(self, node: Lt) -> Any:
-        return node
+        return operations.lth
 
     def visit_LtE(self, node: LtE) -> Any:
-        return node
+        return operations.lte
 
     def visit_NotEq(self, node: NotEq) -> Any:
-        return node
+        return operations.neq
 
     def visit_NotIn(self, node: NotIn) -> Any:
-        return node
+        return operations.nin
 
     def visit_comprehension(self, node: comprehension) -> Any:
         return node
@@ -445,33 +459,10 @@ class SourceCreator(ast.NodeVisitor):
         return len(self.values) - 1
 
 
-class SourceController:
-
-    def __init__(self, source_creator):
-        self.forward_visitor = ForwardVisitor(source_creator)
-        self.reverse_visitor = BackwardVisitor(source_creator)
-        source_creator.get_control_function().initialize(self.forward_visitor)
-
-    def set_debugger(self, debugger):
-        self.forward_visitor.debugger = debugger
-        self.reverse_visitor.debugger = debugger
-
-    def execute(self):
-        number = int(input())
-        if number == 1:
-            self.forward_visitor.execute()
-        elif number == 2:
-            self.reverse_visitor.execute()
-        else:
-            raise Exception
-
-
 class Debugger:
 
-    def __init__(self, source_controller, source_creator):
-        self.source_controller = source_controller
+    def __init__(self, source_creator):
         self.source_creator = source_creator
-        self.evaluator = Evaluator(self.source_creator)
 
     def update(self, source):
         self.source_creator.update(source)
@@ -486,41 +477,15 @@ class Debugger:
             raise Exception
 
     def execute_forward(self):
-        operation = self.source_creator.get_control_function().operation
-        if isinstance(operation, CompositeOperation):
-            if not operation.initialize(self):
-                self.source_creator.get_control_function().update_forward(self)
-            else:
-                self.source_creator.get_control_function().operation = operation.get_operation()
-        else:
-            try:
-                operation.evaluate(self.evaluator)
-                self.source_creator.get_control_function().update_forward(self)
-            except:
-                print('Break')
-                print(operation)
-        print(operation)
+        self.source_creator.get_control_function().get_current_operation().evaluate()
 
     def execute_backward(self):
-        funct = self.source_creator.get_control_function()
-        funct.update_backward()
-        if funct.operation == funct:
-            self.source_creator.pop()
-            raise
-        operation = self.source_creator.get_control_function().operation
-        while isinstance(operation, CompositeOperation) and not operation.is_backward_completed():
-            self.source_creator.get_control_function().operation = operation.get_operation()
-            operation = self.source_creator.get_control_function().operation
-        if not isinstance(operation, CompositeOperation):
-            self.source_controller.backward_visitor.visit(operation)
-        print(operation)
+        self.source_creator.get_control_function().get_current_operation().revert_evaluation()
 
 
 def main(source_program):
     source_creator = SourceCreator(source_program)
-    source_controller = SourceController(source_creator)
-    debugger = Debugger(source_controller, source_creator)
-    debugger.source_controller.set_debugger(debugger)
+    debugger = Debugger(source_creator)
     while True:
         try:
             debugger.execute()
