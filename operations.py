@@ -35,7 +35,8 @@ class BreakException(Exception):
 
 class CallException(Exception):
 
-    def __init__(self):
+    def __init__(self, operation):
+        self.operation = operation
         super(CallException, self).__init__('Callrisian')
 
 
@@ -144,6 +145,15 @@ class ComplexOperation(Operation):
         if self.is_ready():
             return self.get_current_operation().get_value()
         return None
+
+    def handle_back(self):
+        if not self.is_started():
+            self.index[-1] -= 1
+            self.revert_evaluation()
+
+    def handle_break(self):
+        if not self.is_ready():
+            self.index[-1] += 1
 
 
 class BreakOperation(SingleOperation):
@@ -581,6 +591,11 @@ class IfThenElseOperation(ComplexOperation):
 
     def get_value(self):
         return None
+
+    def handle_back(self):
+        if not self.is_started():
+            self.part_index[-1] -= 1
+            self.revert_evaluation()
 
 
 

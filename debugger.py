@@ -4,7 +4,8 @@ import operations
 from evaluation import Evaluator
 from operations import BreakOperation, ConstantOperation, NameOperation, ReturnOperation, \
     BinaryOperation, BooleanOperation, CompareOperation, SubscriptOperation, AugAssignOperation, AssignOperation, \
-    ListOperation, SetOperation, DictOperation, WhileOperation, ForOperation, IfThenElseOperation, FunctionOperation
+    ListOperation, SetOperation, DictOperation, WhileOperation, ForOperation, IfThenElseOperation, FunctionOperation, \
+    CallException, ReturnException
 from forward import ForwardVisitor
 from backward import BackwardVisitor
 from _ast import withitem, alias, keyword, arg, arguments, ExceptHandler, comprehension, NotIn, NotEq, LtE, Lt, IsNot, \
@@ -477,11 +478,20 @@ class Debugger:
             raise Exception
 
     def execute_forward(self):
-        self.source_creator.get_control_function().get_current_operation().evaluate()
+        try:
+            self.source_creator.get_control_function().get_current_operation().evaluate()
+        except CallException:
+            self.source_creator.insert(CallException.operation)
+        except BreakOperation:
+            self.source_creator.get_control_function().get_current_operation().parent_operation.handle_break()
 
     def execute_backward(self):
-        self.source_creator.get_control_function().get_current_operation().revert_evaluation()
-
+        try:
+            self.source_creator.get_control_function().get_current_operation().revert_evaluation()
+        except ReturnException:
+            self.source_creator.go_back()
+        except BreakOperation:
+            self.source_creator.get_control_function().get_current_operation().parent_operation.handle_break()
 
 def main(source_program):
     source_creator = SourceCreator(source_program)
