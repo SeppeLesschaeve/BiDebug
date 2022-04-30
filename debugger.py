@@ -2,7 +2,7 @@ import ast
 
 import operations
 from evaluation import Evaluator
-from operations import BreakOperation, ConstantOperation, NameOperation, ReturnOperation, \
+from operations import BreakException, BreakOperation, ConstantOperation, NameOperation, ReturnOperation, \
     BinaryOperation, BooleanOperation, CompareOperation, SubscriptOperation, AugAssignOperation, AssignOperation, \
     ListOperation, SetOperation, DictOperation, WhileOperation, ForOperation, IfThenElseOperation, FunctionOperation, \
     CallException, ReturnException
@@ -482,7 +482,7 @@ class Debugger:
             self.source_creator.get_control_function().get_current_operation().evaluate()
         except CallException:
             self.source_creator.insert(CallException.operation)
-        except BreakOperation:
+        except BreakException:
             self.source_creator.get_control_function().get_current_operation().parent_operation.handle_break()
 
     def execute_backward(self):
@@ -490,7 +490,7 @@ class Debugger:
             self.source_creator.get_control_function().get_current_operation().revert_evaluation()
         except ReturnException:
             self.source_creator.go_back()
-        except BreakOperation:
+        except BreakException:
             self.source_creator.get_control_function().get_current_operation().parent_operation.handle_break()
 
 def main(source_program):
