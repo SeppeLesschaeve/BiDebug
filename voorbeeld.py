@@ -1,4 +1,4 @@
 import ast
 
-t = ast.parse("{a: 1, b: 2}")
+t = ast.parse("""a.append(1)""")
 print(t)

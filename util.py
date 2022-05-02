@@ -4,6 +4,12 @@ class MemoryHandler:
         self.reference_values = {}
         self.address = 1
 
+    def is_mutable(self, address):
+        if isinstance(self.reference_values[address], list):
+            return True
+        else:
+            return False
+
     def get_value(self, address):
         if isinstance(self.reference_values[address], list):
             return self.reference_values[address][-1]

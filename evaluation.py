@@ -1,4 +1,3 @@
-from backward import BackwardException
 from operations import ConstantOperation, ReferenceOperation, BinaryOperation, CallOperation, SliceOperation, \
     SubscriptOperation, CompareOperation, ListOperation, ReturnOperation, BreakOperation, IfThenElseOperation, \
     AssignOperation

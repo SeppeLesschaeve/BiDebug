@@ -2,12 +2,6 @@ import ast
 
 import operations
 from evaluation import Evaluator
-from operations import BreakException, BreakOperation, ConstantOperation, NameOperation, ReturnOperation, \
-    BinaryOperation, BooleanOperation, CompareOperation, SubscriptOperation, AugAssignOperation, AssignOperation, \
-    ListOperation, SetOperation, DictOperation, WhileOperation, ForOperation, IfThenElseOperation, FunctionOperation, \
-    CallException, ReturnException
-from forward import ForwardVisitor
-from backward import BackwardVisitor
 from _ast import withitem, alias, keyword, arg, arguments, ExceptHandler, comprehension, NotIn, NotEq, LtE, Lt, IsNot, \
     Is, In, GtE, Gt, Eq, USub, UAdd, Not, Invert, Sub, RShift, Pow, MatMult, Mult, Mod, LShift, FloorDiv, Div, BitXor, \
     BitOr, BitAnd, Add, Or, And, Store, Load, Del, Tuple, List, Name, Starred, Subscript, Attribute, NamedExpr, \
@@ -40,14 +34,13 @@ class SourceCreator(ast.NodeVisitor):
         args = []
         for argument in node.args.args:
             args.append(argument.arg)
-        function_def = FunctionOperation(node.name, args)
-        self.functions[node.name] = function_def
         operations = []
         for statement in node.body:
             operations.append(self.visit(statement))
+        function_def = FunctionOperation(node.name, args, operations)
+        self.functions[node.name] = function_def
         for operation in operations:
             operation.parent_operation = function_def
-        function_def.operations = operations
 
     def visit_AsyncFunctionDef(self, node: AsyncFunctionDef) -> Any:
         return node
@@ -56,7 +49,7 @@ class SourceCreator(ast.NodeVisitor):
         return node
 
     def visit_Return(self, node: Return) -> Any:
-        return ReturnOperation([self.visit(node.value)])
+        return operations.ReturnOperation([self.visit(node.value)])
 
     def visit_Delete(self, node: Delete) -> Any:
         return node
@@ -64,22 +57,30 @@ class SourceCreator(ast.NodeVisitor):
     def visit_Assign(self, node: Assign) -> Any:
         targets = []
         for target in node.targets:
-            targets.append(self.visit(target))
-        return AssignOperation(targets, [self.visit(node.value)])
+            targets.append(Name(target).id)
+        ops = [self.visit(node.value)]
+        assign_operation = operations.AssignOperation(targets, ops)
+        for operation in ops:
+            operation.parent_operation = assign_operation
+        return assign_operation
 
     def visit_AugAssign(self, node: AugAssign) -> Any:
-        return AugAssignOperation(self.visit(node.target), [self.visit(node.value)])
+        ops = [self.visit(node.value)]
+        augassign_operation = operations.AugAssignOperation(Name(node.target).id, ops)
+        for operation in ops:
+            operation.parent_operation = augassign_operation
+        return augassign_operation
 
     def visit_AnnAssign(self, node: AnnAssign) -> Any:
         return node
 
     def visit_For(self, node: For) -> Any:
         target = Name(node.target).id
-        operations = [self.visit(node.iter)]
+        ops = [self.visit(node.iter)]
         for statement in node.body:
-            operations.append(self.visit(statement))
-        for_operation = ForOperation(target, operations)
-        for operation in operations:
+            ops.append(self.visit(statement))
+        for_operation = operations.ForOperation(target, ops)
+        for operation in ops:
             operation.parent_operation = for_operation
         return for_operation
 
@@ -87,25 +88,25 @@ class SourceCreator(ast.NodeVisitor):
         return node
 
     def visit_While(self, node: While) -> Any:
-        operations = [self.visit(node.test)]
+        ops = [self.visit(node.test)]
         for statement in node.body:
-            operations.append(self.visit(statement))
-        while_operation = WhileOperation(operations)
-        for operation in operations:
+            ops.append(self.visit(statement))
+        while_operation = operations.WhileOperation(ops)
+        for operation in ops:
             operation.parent_operation = while_operation
         return while_operation
 
     def visit_If(self, node: If) -> Any:
-        operations = [self.visit(node.test)]
+        ops = [self.visit(node.test)]
         then_operations = []
         for statement in node.body:
             then_operations.append(self.visit(statement))
         else_operations = []
         for statement in node.orelse:
             else_operations.append(self.visit(statement))
-        operations.append(then_operations)
-        operations.append(else_operations)
-        if_then_else_operation = IfThenElseOperation(operations)
+        ops.append(then_operations)
+        ops.append(else_operations)
+        if_then_else_operation = operations.IfThenElseOperation(ops)
         for operation in then_operations:
             operation.parent_operation = if_then_else_operation
         for operation in else_operations:
@@ -146,7 +147,7 @@ class SourceCreator(ast.NodeVisitor):
         return node
 
     def visit_Break(self, node: Break) -> Any:
-        return BreakOperation()
+        return operations.BreakOperation()
 
     def visit_Continue(self, node: Continue) -> Any:
         return node
@@ -155,10 +156,18 @@ class SourceCreator(ast.NodeVisitor):
         return node
 
     def visit_BoolOp(self, node: BoolOp) -> Any:
-        return BooleanOperation(self.visit(node.op), [self.visit(node.values[0]), self.visit(node.values[1])])
+        ops = [self.visit(node.values[0]), self.visit(node.values[1])]
+        boolean_operation = operations.BooleanOperation(self.visit(node.op), ops)
+        for operation in ops:
+            operation.parent_operation = boolean_operation
+        return boolean_operation
 
     def visit_BinOp(self, node: BinOp) -> Any:
-        return BinaryOperation(self.visit(node.op), [self.visit(node.left), self.visit(node.right)])
+        ops = [self.visit(node.left), self.visit(node.right)]
+        binary_operation = operations.BinaryOperation(self.visit(node.op), ops)
+        for operation in ops:
+            operation.parent_operation = binary_operation
+        return binary_operation
 
     def visit_UnaryOp(self, node: UnaryOp) -> Any:
         return node
@@ -167,12 +176,12 @@ class SourceCreator(ast.NodeVisitor):
         return node
 
     def visit_IfExp(self, node: IfExp) -> Any:
-        operations = [self.visit(node.test)]
+        ops = [self.visit(node.test)]
         then_operations = [self.visit(node.body)]
         else_operations = [self.visit(node.orelse)]
-        operations.append(then_operations)
-        operations.append(else_operations)
-        if_then_else_operation = IfThenElseOperation(operations)
+        ops.append(then_operations)
+        ops.append(else_operations)
+        if_then_else_operation = operations.IfThenElseOperation(ops)
         for operation in then_operations:
             operation.parent_operation = if_then_else_operation
         for operation in else_operations:
@@ -186,13 +195,19 @@ class SourceCreator(ast.NodeVisitor):
         keys = []
         for key in node.keys:
             keys.append(Constant(key).value)
-        return DictOperation(keys, values)
+        dict_operation = operations.DictOperation(keys, values)
+        for value in values:
+            value.parent_operation = dict_operation
+        return dict_operation
 
     def visit_Set(self, node: Set) -> Any:
         elements = []
         for el in node.elts:
             elements.append(self.visit(el))
-        return SetOperation(elements)
+        set_operation = operations.SetOperation(elements)
+        for element in elements:
+            element.parent_operation = set_operation
+        return set_operation
 
     def visit_ListComp(self, node: ListComp) -> Any:
         return node
@@ -219,13 +234,36 @@ class SourceCreator(ast.NodeVisitor):
         comparisons = []
         for comparison in node.ops:
             comparisons.append(self.visit(comparison))
-        opps = [self.visit(node.left)]
-        for opp in node.comparators:
-            opps.append(self.visit(opp))
-        return CompareOperation(comparisons, opps)
+        ops = [self.visit(node.left)]
+        for operation in node.comparators:
+            ops.append(self.visit(operation))
+        compare_operation = operations.CompareOperation(comparisons, ops)
+        for operation in ops:
+            operation.parent_operation = compare_operation
+        return compare_operation
 
     def visit_Call(self, node: Call) -> Any:
-        return node
+        ops = []
+        if isinstance(node.func, Attribute):
+            target = Name(node.func.value).id
+            attr = node.func.attr
+            for argument in node.args:
+                ops.append(self.visit(argument))
+            call_operation = AttributeOperation(target, attr, ops)
+        elif isinstance(node.func, Name):
+            if node.func.id not in self.functions:
+                op = node.func.id
+                for argument in node.args:
+                    ops.append(self.visit(argument))
+                call_operation = BuiltinOperation(op, ops)
+            else:
+                call_args = []
+                for argument in node.args:
+                    call_args.append(self.visit(argument))
+                call_operation = CallOperation(call_args, self.functions[node.func.id])
+        for operation in ops:
+            operation.parent_operation = call_operation
+        return call_operation
 
     def visit_FormattedValue(self, node: FormattedValue) -> Any:
         return node
@@ -234,7 +272,7 @@ class SourceCreator(ast.NodeVisitor):
         return node
 
     def visit_Constant(self, node: Constant) -> Any:
-        return ConstantOperation(node.value)
+        return operations.ConstantOperation(node.value)
 
     def visit_NamedExpr(self, node: NamedExpr) -> Any:
         return node
@@ -243,19 +281,26 @@ class SourceCreator(ast.NodeVisitor):
         return node
 
     def visit_Subscript(self, node: Subscript) -> Any:
-        return SubscriptOperation([self.visit(node.value), self.visit(node.slice)])
+        ops = [self.visit(node.value), self.visit(node.slice)]
+        subscript_operation = operations.SubscriptOperation(ops)
+        for operation in ops:
+            operation.parent_operation = subscript_operation
+        return subscript_operation
 
     def visit_Starred(self, node: Starred) -> Any:
         return node
 
     def visit_Name(self, node: Name) -> Any:
-        return NameOperation(node.id)
+        return operations.NameOperation(node.id)
 
     def visit_List(self, node: List) -> Any:
         elements = []
         for el in node.elts:
             elements.append(self.visit(el))
-        return ListOperation(elements)
+        list_operation = operations.ListOperation(elements)
+        for element in elements:
+            element.parent_operation = list_operation
+        return list_operation
 
     def visit_Tuple(self, node: Tuple) -> Any:
         return node
@@ -480,21 +525,23 @@ class Debugger:
     def execute_forward(self):
         try:
             self.source_creator.get_control_function().get_current_operation().evaluate()
-        except CallException:
-            self.source_creator.insert(CallException.operation)
-        except BreakException:
+        except operations.CallException as e:
+            self.source_creator.insert(e.operation)
+        except operations.BreakException:
             self.source_creator.get_control_function().get_current_operation().parent_operation.handle_break()
 
     def execute_backward(self):
         try:
             self.source_creator.get_control_function().get_current_operation().revert_evaluation()
-        except ReturnException:
+        except operations.ReturnException:
             self.source_creator.go_back()
-        except BreakException:
+        except operations.BreakException:
             self.source_creator.get_control_function().get_current_operation().parent_operation.handle_break()
+
 
 def main(source_program):
     source_creator = SourceCreator(source_program)
+    operations.source_creator = source_creator
     debugger = Debugger(source_creator)
     while True:
         try:
@@ -508,7 +555,7 @@ if __name__ == '__main__':
 a = 1
 b = a
 ll = [0, 9]
-
+len(ll)
 
 def div(d1, d2):
     return d1 / d2
