@@ -35,7 +35,7 @@ class SourceCreator(ast.NodeVisitor):
             args.append(argument.arg)
         ops = []
         for statement in node.body:
-            operations.append(self.visit(statement))
+            ops.append(self.visit(statement))
         function_def = [node.name, args, ops]
         self.functions[node.name] = function_def
         for operation in ops:
@@ -551,6 +551,9 @@ def main(source_program):
     while True:
         try:
             debugger.execute()
+            for key, value in source_creator.get_control_call().items():
+                value = operations.Operation.memory_handler.get_value(source_creator.get_control_call()[key])
+                print(key, ' : ', value)
         except Exception:
             print(debugger.source_creator.get_control_function())
 
