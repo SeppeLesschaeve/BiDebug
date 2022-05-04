@@ -1,5 +1,5 @@
-from binop_state import StartBinOpState
-from call_state import StartCallState
+import copy
+
 from util import MemoryHandler
 
 add = lambda a, b: a + b
@@ -50,6 +50,7 @@ class ReturnException(Exception):
 class Operation:
 
     memory_handler = MemoryHandler()
+    source_creator = None
 
     def __init__(self):
         self.parent_operation = None
@@ -69,8 +70,8 @@ class Operation:
     def revert_evaluation(self):
         return
 
-    def get_function(self):
-        return self.parent_operation.get_function()
+    def get_call(self):
+        return self.parent_operation.get_call()
 
 
 class SingleOperation(Operation):
@@ -117,16 +118,12 @@ class ComplexOperation(Operation):
         return self.get_index() == len(self.operations) - 1 and self.get_current_operation().is_ready()
 
     def is_started(self):
-        if not self.index:
-            return True
         return self.get_index() == 0 and self.get_current_operation().is_started()
 
     def get_current_operation(self):
         return self.operations[self.get_index()].get_current_operation()
 
     def evaluate(self):
-        if self.is_started():
-            self.index.append(0)
         self.get_current_operation().evaluate()
         if self.get_current_operation().is_ready():
             self.get_current_operation().finish_evaluation()
@@ -186,7 +183,7 @@ class NameOperation(SingleOperation):
         self.eval.append(self.get_referenced_value())
 
     def get_referenced_value(self):
-        return self.get_function().get_referenced_value(self.name)
+        return self.get_call().get_referenced_value(self.name)
 
 
 class ReturnOperation(ComplexOperation):
@@ -210,9 +207,9 @@ class ReturnOperation(ComplexOperation):
 
     def finish_evaluation(self):
         if self.operations:
-            self.get_function().add_result(self.get_current_operation().get_value())
+            self.get_call().add_result(self.get_current_operation().get_value())
         else:
-            self.get_function().add_result(None)
+            self.get_call().add_result(None)
         raise ReturnException
 
     def revert_evaluation(self):
@@ -232,6 +229,10 @@ class BinaryOperation(ComplexOperation):
         self.op = op
         self.eval = []
         ComplexOperation.__init__(self, operations)
+
+    def evaluate(self):
+        while not self.is_ready():
+            super(BinaryOperation, self).evaluate()
 
     def finish_evaluation(self):
         self.eval.append(self.op(self.operations[0].get_value(), self.operations[1].get_value()))
@@ -253,6 +254,10 @@ class BooleanOperation(ComplexOperation):
         self.op = op
         self.eval = []
         ComplexOperation.__init__(self, operations)
+
+    def evaluate(self):
+        while not self.is_ready():
+            super(BooleanOperation, self).evaluate()
 
     def finish_evaluation(self):
         self.eval.append(self.op(self.operations[0].get_value(), self.operations[1].get_value()))
@@ -281,6 +286,10 @@ class CompareOperation(ComplexOperation):
             value = value and self.comparisons[i](self.operations[i].get_value(), self.operations[i + 1].get_value())
         self.eval.append(value)
 
+    def evaluate(self):
+        while not self.is_ready():
+            super(CompareOperation, self).evaluate()
+
     def revert_evaluation(self):
         super(CompareOperation, self).revert_evaluation()
         if self.is_started():
@@ -297,6 +306,10 @@ class SubscriptOperation(ComplexOperation):
     def __init__(self, operations):
         self.eval = []
         ComplexOperation.__init__(self, operations)
+
+    def evaluate(self):
+        while not self.is_ready():
+            super(SubscriptOperation, self).evaluate()
 
     def finish_evaluation(self):
         self.eval.append(self.operations[0].get_value()[self.operations[1].get_value()])
@@ -319,12 +332,12 @@ class AugAssignOperation(ComplexOperation):
         ComplexOperation.__init__(self, operations)
 
     def finish_evaluation(self):
-        self.get_function().update_target(self.target, self.get_current_operation().get_value())
+        self.get_call().update_target(self.target, self.get_current_operation().get_value())
 
     def revert_evaluation(self):
         super(AugAssignOperation, self).revert_evaluation()
         if self.is_started():
-            self.get_function().revert_target(self.target)
+            self.get_call().revert_target(self.target)
 
 
 class AssignOperation(ComplexOperation):
@@ -334,12 +347,12 @@ class AssignOperation(ComplexOperation):
         ComplexOperation.__init__(self, operations)
 
     def finish_evaluation(self):
-        self.get_function().update_targets(self.targets, self.get_current_operation().get_value())
+        self.get_call().update_targets(self.targets, self.get_current_operation().get_value())
 
     def revert_evaluation(self):
         super(AssignOperation, self).revert_evaluation()
         if self.is_started():
-            self.get_function().revert_targets(self.targets)
+            self.get_call().revert_targets(self.targets)
 
 
 class ListOperation(ComplexOperation):
@@ -347,6 +360,12 @@ class ListOperation(ComplexOperation):
     def __init__(self, operations):
         self.eval = []
         ComplexOperation.__init__(self, operations)
+
+    def evaluate(self):
+        if not self.operations:
+            return
+        while not self.is_ready():
+            super(ListOperation, self).evaluate()
 
     def is_ready(self):
         if self.operations:
@@ -358,10 +377,6 @@ class ListOperation(ComplexOperation):
         for i in range(len(self.operations)):
             value.append(self.operations[i].get_value())
         self.eval.append(value)
-
-    def evaluate(self):
-        if self.operations:
-            super(ListOperation, self).evaluate()
 
     def revert_evaluation(self):
         super(ListOperation, self).revert_evaluation()
@@ -385,15 +400,17 @@ class SetOperation(ComplexOperation):
             super(SetOperation, self).is_ready()
         return True
 
+    def evaluate(self):
+        if not self.operations:
+            return
+        while not self.is_ready():
+            super(SetOperation, self).evaluate()
+
     def finish_evaluation(self):
         value = set()
         for i in range(len(self.operations)):
             value.add(self.operations[i].get_value())
         self.eval.append(value)
-
-    def evaluate(self):
-        if self.operations:
-            super(SetOperation, self).evaluate()
 
     def revert_evaluation(self):
         super(SetOperation, self).revert_evaluation()
@@ -418,15 +435,17 @@ class DictOperation(ComplexOperation):
             super(DictOperation, self).is_ready()
         return True
 
+    def evaluate(self):
+        if not self.operations:
+            return
+        while not self.is_ready():
+            super(DictOperation, self).evaluate()
+
     def finish_evaluation(self):
         value = {}
         for i in range(len(self.operations)):
             value[self.keys[i]] = self.operations[i].get_value()
         self.eval.append(value)
-
-    def evaluate(self):
-        if self.operations:
-            super(DictOperation, self).evaluate()
 
     def revert_evaluation(self):
         super(DictOperation, self).revert_evaluation()
@@ -486,7 +505,7 @@ class WhileOperation(ComplexOperation):
 class ForOperation(ComplexOperation):
 
     def __init__(self, target, operations):
-        self.get_function().update_target(target, None)
+        self.get_call().update_target(target, None)
         self.target = target
         self.iterations = []
         ComplexOperation.__init__(self, operations)
@@ -500,11 +519,11 @@ class ForOperation(ComplexOperation):
             self.iterations.append(-1)
         self.get_current_operation().evaluate()
         if self.get_index() == 0:
-            self.get_function().update_target(self.target, self.operations[0].get_value()[self.iterations[-1]])
+            self.get_call().update_target(self.target, self.operations[0].get_value()[self.iterations[-1]])
         if super(ForOperation, self).is_ready():
             if not self.is_ready():
                 self.iterations[-1] += 1
-                self.get_function().update_target(self.target, self.operations[0].get_value()[self.iterations[-1]])
+                self.get_call().update_target(self.target, self.operations[0].get_value()[self.iterations[-1]])
                 self.index[-1] += 1
 
     def revert_evaluation(self):
@@ -514,7 +533,7 @@ class ForOperation(ComplexOperation):
         if self.get_index() == 1 and self.get_current_operation().is_started():
             if self.iterations[-1] > 0:
                 self.iterations[-1] -= 1
-                self.get_function().revert_target(self.target)
+                self.get_call().revert_target(self.target)
                 self.index[-1] = len(self.operations) - 1
         elif self.get_current_operation().is_started():
             self.index[-1] -= 1
@@ -604,33 +623,118 @@ class AttributeOperation(ComplexOperation):
     def __init__(self, target, attr, operations):
         self.target = target
         self.attr = attr
-        self.mapping = {}
         ComplexOperation.__init__(self, operations)
 
-    def evaluate(self):
-        if self.is_started():
-            mapping = source_creator.get_control_function().mapping
-            for key, value in mapping.items:
-                if Operation.memoryhandler.is_mutable(value[-1]):
-                    self.mapping[key] = 1
-
-            self.index.append(0)
-        self.get_current_operation().evaluate()
-        if self.get_current_operation().is_ready():
-            self.get_current_operation().finish_evaluation()
-            if not self.is_ready():
-                self.index[-1] += 1
-
     def finish_evaluation(self):
-        return
+        address = Operation.source_creator.get_prev_call().mapping[self.target][-1]
+        value = Operation.memory_handler.reference_values[address][-1]
+        copy_value = copy.deepcopy(value)
+        Operation.memory_handler.reference_values[address].append(copy_value)
+        arguments = []
+        for i in range(len(self.operations)):
+            arguments.append(self.operations[i].get_value())
+        address = Operation.source_creator.get_prev_call().mapping[self.target][-1]
+        value = Operation.memory_handler.reference_values[address][-1]
+        getattr(value, self.attr)(*arguments)
 
     def revert_evaluation(self):
         if not self.is_started():
-            self.get_current_operation().revert_evaluation()
-            if self.get_current_operation().is_started() and self.get_index() > 0:
-                self.index[-1] -= 1
+            super(AttributeOperation, self).revert_evaluation()
+        else:
+            Operation.source_creator.get_prev_call().revert_target(self.target)
+
+
+class BuiltinOperation(ComplexOperation):
+
+    def __init__(self, attr, operations):
+        self.attr = attr
+        self.eval = []
+        ComplexOperation.__init__(self, operations)
+
+    def finish_evaluation(self):
+        arguments = []
+        for i in range(len(self.operations)):
+            arguments.append(self.operations[i].get_value())
+        self.eval.append(getattr(__builtins__, self.attr)(*arguments))
+
+    def revert_evaluation(self):
+        self.eval.pop()
 
     def get_value(self):
-        if self.is_ready():
-            return self.get_current_operation().get_value()
-        return None
+        if not self.eval:
+            return self.eval[-1]
+        else:
+            return None
+
+
+class CallOperation(ComplexOperation):
+
+    def __init__(self, name, args, operations):
+        self.name = name
+        self.args = args
+        self.mapping = {}
+        ComplexOperation.__init__(self, operations)
+
+    def evaluate_mapping(self):
+        self.args[len(self.mapping)].evaluate()
+        if self.args[len(self.mapping)].is_ready():
+            if isinstance(self.args[len(self.mapping)], NameOperation):
+                address = Operation.source_creator.get_prev_call().mapping[self.args[len(self.mapping)].name][-1]
+                if Operation.memory_handler.is_mutable(address):
+                    value = copy.deepcopy(Operation.memory_handler.reference_values[address])
+                else:
+                    value = [Operation.memory_handler.reference_values[address][-1]]
+            else:
+                if isinstance(self.args[len(self.mapping)], ConstantOperation):
+                    Operation.memory_handler.put_value(self.args[len(self.mapping)], False)
+                else:
+                    Operation.memory_handler.put_value(self.args[len(self.mapping)], True)
+                value = [Operation.memory_handler.address]
+            key = Operation.source_creator.functions[self.name].args[len(self.mapping)]
+            self.mapping[key] = value
+
+    def evaluate(self):
+        while len(self.mapping) < len(self.args):
+            self.evaluate_mapping()
+        super(CallOperation, self).evaluate()
+
+    def revert_evaluation(self):
+        if self.is_started():
+            self.mapping.clear()
+        else:
+            super(CallOperation, self).revert_evaluation()
+
+    def get_referenced_value(self, name):
+        return Operation.memory_handler.get_value(self.mapping[name][-1])
+
+    def update_target(self, target, value):
+        address = self.mapping[target][-1]
+        if Operation.memory_handler.is_mutable(address):
+            Operation.memory_handler.reference_values[address].append(value)
+        else:
+            Operation.memory_handler.put_value(value, False)
+            self.mapping[target].append(Operation.memory_handler.address)
+
+    def update_targets(self, targets, value):
+        if len(targets) == 1:
+            self.update_target(targets[0], value)
+        else:
+            for i in range(len(targets)):
+                k = 0
+
+    def revert_target(self, target):
+        address = self.mapping[target][-1]
+        if Operation.memory_handler.inv_value(address):
+            self.mapping[target].pop()
+            if not self.mapping:
+                self.mapping.pop(target)
+
+    def revert_targets(self, targets):
+        for target in targets:
+            self.revert_target(target)
+
+    def add_result(self, value):
+        Operation.memory_handler.put_value(value, True)
+
+    def is_ready(self):
+        return super(CallOperation, self).is_ready() or 'return' in self.mapping

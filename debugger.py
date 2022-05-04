@@ -1,4 +1,5 @@
 import ast
+import copy
 
 import operations
 from evaluation import Evaluator
@@ -17,29 +18,27 @@ from typing import Any
 class SourceCreator(ast.NodeVisitor):
 
     def visit_Module(self, node: Module) -> Any:
-        boot = FunctionOperation('boot', None)
         boot_part = []
         for program in node.body:
             if not isinstance(program, ast.FunctionDef):
                 boot_part.append(self.visit(program))
             else:
                 self.visit(program)
+        boot = ['boot', [], boot_part]
         for statement in boot_part:
             statement.parent_operation = boot
-        boot.operations = boot_part
-        boot.source.append({})
         self.functions['boot'] = boot
 
     def visit_FunctionDef(self, node: FunctionDef) -> Any:
         args = []
         for argument in node.args.args:
             args.append(argument.arg)
-        operations = []
+        ops = []
         for statement in node.body:
             operations.append(self.visit(statement))
-        function_def = FunctionOperation(node.name, args, operations)
+        function_def = [node.name, args, ops]
         self.functions[node.name] = function_def
-        for operation in operations:
+        for operation in ops:
             operation.parent_operation = function_def
 
     def visit_AsyncFunctionDef(self, node: AsyncFunctionDef) -> Any:
@@ -249,18 +248,19 @@ class SourceCreator(ast.NodeVisitor):
             attr = node.func.attr
             for argument in node.args:
                 ops.append(self.visit(argument))
-            call_operation = AttributeOperation(target, attr, ops)
+            call_operation = operations.AttributeOperation(target, attr, ops)
         elif isinstance(node.func, Name):
             if node.func.id not in self.functions:
                 op = node.func.id
                 for argument in node.args:
                     ops.append(self.visit(argument))
-                call_operation = BuiltinOperation(op, ops)
+                call_operation = operations.BuiltinOperation(op, ops)
             else:
                 call_args = []
                 for argument in node.args:
                     call_args.append(self.visit(argument))
-                call_operation = CallOperation(call_args, self.functions[node.func.id])
+                copy_of_operations = copy.deepcopy(self.get_function_operations(node.func.id))
+                call_operation = operations.CallOperation(node.func.id, call_args, copy_of_operations)
         for operation in ops:
             operation.parent_operation = call_operation
         return call_operation
@@ -470,27 +470,30 @@ class SourceCreator(ast.NodeVisitor):
         print(self.functions)
 
     def get_active_source(self, reference):
-        source = self.get_control_function().get_source()
+        source = self.get_control_call().get_source()
         if reference in source:
             key = source[reference][-1]
-            return self.values[key]
+            return operations.Operation.memory_handler.get_value(key)
         else:
-            source = self.functions['boot'].source[0]
+            source = self.call_stack[0].get_source()
             if reference in source:
-                return self.values[source[reference][-1]]
+                key = source[reference][-1]
+                return operations.Operation.memory_handler.get_value(key)
             else:
                 raise Exception
 
     def initialize_stack(self):
-        call_stack = [self.functions['boot']]
+        copy_of_operations = copy.deepcopy(self.get_function_operations('boot'))
+        call_stack = [operations.CallOperation('boot', self.get_function_args('boot'), copy_of_operations)]
         self.call_stack = call_stack
         self.index = 0
 
-    def get_control_function(self):
+    def get_control_call(self):
         return self.call_stack[self.index]
 
     def insert(self, operation):
         self.index += 1
+        operation.operations = copy.deepcopy(self.functions[operation.name].operations)
         self.call_stack.insert(self.index, operation)
 
     def go_back(self):
@@ -500,9 +503,11 @@ class SourceCreator(ast.NodeVisitor):
         self.call_stack.pop(self.index)
         self.index -= 1
 
-    def add_value(self, value):
-        self.values[len(self.values)] = value
-        return len(self.values) - 1
+    def get_function_args(self, name):
+        return self.functions[name][1]
+
+    def get_function_operations(self, name):
+        return self.functions[name][2]
 
 
 class Debugger:
