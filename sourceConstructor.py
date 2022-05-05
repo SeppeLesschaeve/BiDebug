@@ -571,4 +571,7 @@ b += a
 test(ll, l = ll, b = 1)
 print(a,b,c,i,ll)
 """
-    main(text)
+    simpel_voorbeeld = """
+a = 1
+a = a + 1"""
+    main(simpel_voorbeeld)

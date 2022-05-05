@@ -1,4 +1,4 @@
-from operations import ConstantOperation, ReferenceOperation, BinaryOperation, CallOperation, SliceOperation, \
+from operations import ConstantOperation, NameOperation, BinaryOperation, CallOperation, \
     SubscriptOperation, CompareOperation, ListOperation, ReturnOperation, BreakOperation, IfThenElseOperation, \
     AssignOperation
 
@@ -10,7 +10,7 @@ class Evaluator:
     def evaluate_constant(self, el: ConstantOperation):
         el.eval = el.value
 
-    def evaluate_name(self, el: ReferenceOperation):
+    def evaluate_name(self, el: NameOperation):
         el.eval = self.source_creator.get_active_source(el.ref)[-1]
 
     def evaluate_binop(self, el: BinaryOperation):
@@ -18,12 +18,6 @@ class Evaluator:
 
     def evaluate_call(self, el: CallOperation):
         el.state.evaluate()
-
-    def evaluate_slice(self, el: SliceOperation):
-        el.lower.evaluate()
-        el.higher.evaluate()
-        el.step.evaluate()
-        el.eval = el.set_elements()
 
     def evaluate_subscript(self, el: SubscriptOperation):
         el.slice.evaluate()

@@ -2,7 +2,6 @@ import ast
 import copy
 
 import operations
-from evaluation import Evaluator
 from _ast import withitem, alias, keyword, arg, arguments, ExceptHandler, comprehension, NotIn, NotEq, LtE, Lt, IsNot, \
     Is, In, GtE, Gt, Eq, USub, UAdd, Not, Invert, Sub, RShift, Pow, MatMult, Mult, Mod, LShift, FloorDiv, Div, BitXor, \
     BitOr, BitAnd, Add, Or, And, Store, Load, Del, Tuple, List, Name, Starred, Subscript, Attribute, NamedExpr, \
@@ -24,7 +23,7 @@ class SourceCreator(ast.NodeVisitor):
                 boot_part.append(self.visit(program))
             else:
                 self.visit(program)
-        boot = ['boot', [], boot_part]
+        boot = [[], boot_part]
         for statement in boot_part:
             statement.parent_operation = boot
         self.functions['boot'] = boot
@@ -36,10 +35,8 @@ class SourceCreator(ast.NodeVisitor):
         ops = []
         for statement in node.body:
             ops.append(self.visit(statement))
-        function_def = [node.name, args, ops]
+        function_def = [args, ops]
         self.functions[node.name] = function_def
-        for operation in ops:
-            operation.parent_operation = function_def
 
     def visit_AsyncFunctionDef(self, node: AsyncFunctionDef) -> Any:
         return node
@@ -462,7 +459,6 @@ class SourceCreator(ast.NodeVisitor):
         self.index = -1
         self.build_tree(text)
         self.initialize_stack()
-        self.values = {}
 
     def build_tree(self, text):
         self.tree = ast.parse(text)
@@ -504,10 +500,10 @@ class SourceCreator(ast.NodeVisitor):
         self.index -= 1
 
     def get_function_args(self, name):
-        return self.functions[name][1]
+        return self.functions[name][0]
 
     def get_function_operations(self, name):
-        return self.functions[name][2]
+        return self.functions[name][1]
 
 
 class Debugger:
@@ -529,19 +525,19 @@ class Debugger:
 
     def execute_forward(self):
         try:
-            self.source_creator.get_control_function().get_current_operation().evaluate()
+            self.source_creator.get_control_call().get_current_operation().evaluate()
         except operations.CallException as e:
             self.source_creator.insert(e.operation)
         except operations.BreakException:
-            self.source_creator.get_control_function().get_current_operation().parent_operation.handle_break()
+            self.source_creator.get_control_call().get_current_operation().parent_operation.handle_break()
 
     def execute_backward(self):
         try:
-            self.source_creator.get_control_function().get_current_operation().revert_evaluation()
+            self.source_creator.get_control_call().get_current_operation().revert_evaluation()
         except operations.ReturnException:
             self.source_creator.go_back()
         except operations.BreakException:
-            self.source_creator.get_control_function().get_current_operation().parent_operation.handle_break()
+            self.source_creator.get_control_call().get_current_operation().parent_operation.handle_break()
 
 
 def main(source_program):
@@ -555,7 +551,7 @@ def main(source_program):
                 value = operations.Operation.memory_handler.get_value(source_creator.get_control_call()[key])
                 print(key, ' : ', value)
         except Exception:
-            print(debugger.source_creator.get_control_function())
+            print(debugger.source_creator.get_control_call())
 
 
 if __name__ == '__main__':
@@ -582,7 +578,7 @@ def main(b):
         else:
             global a
             a += 1
-    return
+    return None
 
 main(2)   
 """
