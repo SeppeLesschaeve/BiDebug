@@ -124,7 +124,7 @@ class ComplexOperation(Operation):
         return self.get_index() == 0 and self.get_current_operation().is_started()
 
     def get_current_operation(self):
-        return self.operations[self.get_index()].get_current_operation()
+        return self.operations[self.get_index()]
 
     def evaluate(self):
         self.get_current_operation().evaluate()

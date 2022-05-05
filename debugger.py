@@ -14,6 +14,12 @@ from collections import deque
 from typing import Any
 
 
+class StopException(Exception):
+
+    def __init__(self):
+        super(StopException, self).__init__('Stopa Fett')
+
+
 class SourceCreator(ast.NodeVisitor):
 
     def visit_Module(self, node: Module) -> Any:
@@ -490,7 +496,7 @@ class SourceCreator(ast.NodeVisitor):
     def insert(self, operation):
         operation.index.append(0)
         self.index += 1
-        operation.operations = copy.deepcopy(self.functions[operation.name].operations)
+        operation.operations = copy.deepcopy(self.get_function_operations(operation.name))
         self.call_stack.insert(self.index, operation)
 
     def go_back(self):
@@ -516,13 +522,16 @@ class Debugger:
         self.source_creator.update(source)
 
     def execute(self):
-        number = int(input())
-        if number == 1:
-            self.execute_forward()
-        elif number == 2:
-            self.execute_backward()
-        else:
-            raise Exception
+        while True:
+            number = int(input())
+            if number == 1:
+                self.execute_forward()
+                break
+            elif number == 2:
+                self.execute_backward()
+                break
+            elif number == 3:
+                raise StopException
 
     def execute_forward(self):
         try:
@@ -551,6 +560,8 @@ def main(source_program):
             for key, value in source_creator.get_control_call().mapping.items():
                 value = operations.Operation.memory_handler.get_value(source_creator.get_control_call().mapping[key])
                 print(key, ' : ', value)
+        except StopException:
+            break
         except Exception:
             print(debugger.source_creator.get_control_call())
 
