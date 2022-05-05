@@ -455,7 +455,7 @@ class SourceCreator(ast.NodeVisitor):
     def __init__(self, text):
         self.functions = {}
         self.tree = None
-        self.call_stack = None
+        self.call_stack = []
         self.index = -1
         self.build_tree(text)
         self.initialize_stack()
@@ -480,14 +480,15 @@ class SourceCreator(ast.NodeVisitor):
 
     def initialize_stack(self):
         copy_of_operations = copy.deepcopy(self.get_function_operations('boot'))
-        call_stack = [operations.CallOperation('boot', self.get_function_args('boot'), copy_of_operations)]
-        self.call_stack = call_stack
+        call_operation = operations.CallOperation('boot', self.get_function_args('boot'), copy_of_operations)
+        self.insert(call_operation)
         self.index = 0
 
     def get_control_call(self):
         return self.call_stack[self.index]
 
     def insert(self, operation):
+        operation.index.append(0)
         self.index += 1
         operation.operations = copy.deepcopy(self.functions[operation.name].operations)
         self.call_stack.insert(self.index, operation)
@@ -547,8 +548,8 @@ def main(source_program):
     while True:
         try:
             debugger.execute()
-            for key, value in source_creator.get_control_call().items():
-                value = operations.Operation.memory_handler.get_value(source_creator.get_control_call()[key])
+            for key, value in source_creator.get_control_call().mapping.items():
+                value = operations.Operation.memory_handler.get_value(source_creator.get_control_call().mapping[key])
                 print(key, ' : ', value)
         except Exception:
             print(debugger.source_creator.get_control_call())
