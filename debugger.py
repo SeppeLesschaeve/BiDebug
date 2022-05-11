@@ -155,7 +155,11 @@ class SourceCreator(ast.NodeVisitor):
         return node
 
     def visit_Slice(self, node: Slice) -> Any:
-        return node
+        ops = [self.visit(node.lower),self.visit(node.higher),self.viist(node.step)]
+        slice_op = operations.SliceOperation(ops)
+        for op in ops:
+            op.parent_operation = slice_op
+        return slice_op
 
     def visit_BoolOp(self, node: BoolOp) -> Any:
         ops = [self.visit(node.values[0]), self.visit(node.values[1])]
