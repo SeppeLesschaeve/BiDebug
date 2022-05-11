@@ -48,6 +48,12 @@ class ReturnException(Exception):
         super(ReturnException, self).__init__('Reyturn')
 
 
+class StartException(Exception):
+    
+    def __init__(self):
+        super(StartException, self).__init__('Start Wars')
+
+
 class Operation:
 
     memory_handler = MemoryHandler()
@@ -162,6 +168,8 @@ class ComplexOperation(Operation):
 
     def go_back(self):
         if self.get_index() == 0:
+            if not self.parent_operation:
+                raise StartException
             self.parent_operation.go_back()
         else:
             self.index[-1] -= 1
@@ -754,6 +762,9 @@ class BuiltinOperation(ComplexOperation):
         for i in range(len(self.operations)):
             arguments.append(self.operations[i].get_value())
         self.eval.append(getattr(builtins, self.attr)(*arguments))
+
+    def evaluate(self):
+        super(BuiltinOperation, self).evaluate()
 
     def revert_evaluation(self):
         self.eval.pop()

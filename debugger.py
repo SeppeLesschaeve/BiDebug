@@ -551,9 +551,11 @@ class Debugger:
             self.source_creator.get_control_call().get_current_operation().parent_operation.handle_break()
 
     def execute_backward(self):
-        if self.source_creator.get_control_call().name == 'boot' and self.source_creator.get_control_call().is_started():
-            return
-        self.source_creator.get_control_call().go_back()
+        if not (self.source_creator.get_control_call().name == 'boot' and self.source_creator.get_control_call().is_ready()):
+            try:
+                self.source_creator.get_control_call().go_back()
+            except operations.StartException:
+                return
         try:
             self.source_creator.get_control_call().get_current_operation().revert_evaluation()
         except operations.ReturnException:
