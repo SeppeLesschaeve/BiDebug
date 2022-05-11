@@ -683,7 +683,7 @@ class IfThenElseOperation(ComplexOperation):
 
     def get_current_operation(self):
         if self.get_index() == 0:
-            return self.operations[0].get_current_operation()
+            return self.operations[0]
         elif self.choices[-1]:
             return self.operations[1][self.get_index()].get_current_operation()
         else:

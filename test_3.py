@@ -12,4 +12,4 @@ def permutaties(lijst):
         for rest in permutaties(left + right):
             perms.append([lijst[i]] + rest)
     return perms
-permutaties(3)
+permutaties([1,2,3])
