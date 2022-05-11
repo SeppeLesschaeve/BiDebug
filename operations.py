@@ -719,12 +719,14 @@ class AttributeOperation(ComplexOperation):
             super(AttributeOperation, self).revert_evaluation()
         else:
             Operation.source_creator.get_prev_call().revert_target(self.target)
-        
-    class SliceOperation(ComplexOperation):
-        def __init__(self,operations):
+
+
+class SliceOperation(ComplexOperation):
+
+        def __init__(self, operations):
             self.eval = []
             self.operations = operations
-            ComplexOperation(self,operations)
+            ComplexOperation.__init__(self,operations)
         
         def finish_evaluation(self):
             self.eval.append(slice(self.operations[0].get_value(),self.operations[1].get_value(),self.operations[2].get_value()))
@@ -737,6 +739,7 @@ class AttributeOperation(ComplexOperation):
                 return self.eval[-1]
             else:
                 return None
+
 
 class BuiltinOperation(ComplexOperation):
 
