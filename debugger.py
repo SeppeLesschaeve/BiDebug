@@ -541,6 +541,8 @@ class Debugger:
                 raise StopException
 
     def execute_forward(self):
+        if self.source_creator.get_control_call().name == 'boot' and self.source_creator.get_control_call().is_ready():
+            return
         try:
             self.source_creator.get_control_call().get_current_operation().evaluate()
         except operations.CallException as e:
@@ -549,6 +551,8 @@ class Debugger:
             self.source_creator.get_control_call().get_current_operation().parent_operation.handle_break()
 
     def execute_backward(self):
+        if self.source_creator.get_control_call().name == 'boot' and self.source_creator.get_control_call().is_started():
+            return
         self.source_creator.get_control_call().go_back()
         try:
             self.source_creator.get_control_call().get_current_operation().revert_evaluation()

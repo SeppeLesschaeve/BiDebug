@@ -122,7 +122,7 @@ class ComplexOperation(Operation):
         return self.index[-1]
 
     def is_ready(self):
-        return self.get_index() == len(self.operations) - 1 and self.get_current_operation().is_ready()
+        return self.index and self.get_index() == len(self.operations) - 1 and self.get_current_operation().is_ready()
 
     def get_current_operation(self):
         return self.operations[self.get_index()]
@@ -183,6 +183,7 @@ class BreakOperation(SingleOperation):
 
     def evaluate(self):
         raise BreakException
+
 
 
 class ConstantOperation(SingleOperation):
