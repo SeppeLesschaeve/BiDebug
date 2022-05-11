@@ -145,6 +145,8 @@ class ComplexOperation(Operation):
             self.get_current_operation().finish_evaluation()
             if not self.is_ready():
                 self.index[-1] += 1
+                if isinstance(self.get_current_operation(), CallOperation):
+                    raise CallException(self.get_current_operation())
             else:
                 self.finish_evaluation()
 
@@ -158,6 +160,8 @@ class ComplexOperation(Operation):
                 self.get_current_operation().finalize()
                 if self.get_index() > 0:
                     self.index[-1] -= 1
+                    if isinstance(self.get_current_operation(), CallOperation):
+                        raise CallException(self.get_current_operation())
                 else:
                     self.finalize()
 
@@ -173,15 +177,21 @@ class ComplexOperation(Operation):
             self.parent_operation.go_back()
         else:
             self.index[-1] -= 1
+            if isinstance(self.get_current_operation(), CallOperation):
+                raise CallException(self.get_current_operation())
 
     def handle_back(self):
         if not self.is_started():
             self.index[-1] -= 1
+            if isinstance(self.get_current_operation(), CallOperation):
+                raise CallException(self.get_current_operation())
             self.revert_evaluation()
 
     def handle_break(self):
         if not self.is_ready():
             self.index[-1] += 1
+            if isinstance(self.get_current_operation(), CallOperation):
+                raise CallException(self.get_current_operation())
 
 
 class BreakOperation(SingleOperation):
@@ -557,16 +567,22 @@ class WhileOperation(ComplexOperation):
             raise BreakException
         if self.get_index() == 0 and self.operations[0].get_value():
             self.index[-1] += 1
+            if isinstance(self.get_current_operation(), CallOperation):
+                raise CallException(self.get_current_operation())
         elif self.get_current_operation().is_ready():
             self.get_current_operation().finish_evaluation()
             if self.get_index() < len(self.operations) - 1:
                 self.index[-1] += 1
+                if isinstance(self.get_current_operation(), CallOperation):
+                    raise CallException(self.get_current_operation())
             else:
                 self.finish_evaluation()
 
     def finish_evaluation(self):
         self.number[-1] += 1
         self.index[-1] = 0
+        if isinstance(self.get_current_operation(), CallOperation):
+            raise CallException(self.get_current_operation())
 
     def revert_evaluation(self):
         if self.is_started():
@@ -574,10 +590,14 @@ class WhileOperation(ComplexOperation):
         if self.get_index() == 0 and self.number[-1] > 0:
             self.number[-1] -= 1
             self.index[-1] = len(self.operations) - 1
+            if isinstance(self.get_current_operation(), CallOperation):
+                raise CallException(self.get_current_operation())
         else:
             self.get_current_operation().revert_evaluation()
             if self.get_current_operation().is_started() and self.get_index() > 0:
                 self.index[-1] -= 1
+                if isinstance(self.get_current_operation(), CallOperation):
+                    raise CallException(self.get_current_operation())
 
     def get_value(self):
         return None
@@ -609,6 +629,8 @@ class ForOperation(ComplexOperation):
                 self.get_call().update_target(self.target, self.operations[0].get_value()[self.iterations[-1]],
                                               self.get_current_operation().is_mutable())
                 self.index[-1] += 1
+                if isinstance(self.get_current_operation(), CallOperation):
+                    raise CallException(self.get_current_operation())
 
     def revert_evaluation(self):
         if self.is_started():
@@ -619,8 +641,12 @@ class ForOperation(ComplexOperation):
                 self.iterations[-1] -= 1
                 self.get_call().revert_target(self.target)
                 self.index[-1] = len(self.operations) - 1
+                if isinstance(self.get_current_operation(), CallOperation):
+                    raise CallException(self.get_current_operation())
         elif self.get_current_operation().is_started():
             self.index[-1] -= 1
+            if isinstance(self.get_current_operation(), CallOperation):
+                raise CallException(self.get_current_operation())
 
     def get_value(self):
         return None
@@ -679,10 +705,14 @@ class IfThenElseOperation(ComplexOperation):
             self.choices.append(self.get_current_operation().get_value())
             self.part_index.append(0)
             self.index[-1] = 1
+            if isinstance(self.get_current_operation(), CallOperation):
+                raise CallException(self.get_current_operation())
         elif self.get_current_operation().is_ready():
             self.get_current_operation().finish_evaluation()
             if self.get_index() < self.get_last_index():
                 self.part_index[-1] += 1
+                if isinstance(self.get_current_operation(), CallOperation):
+                    raise CallException(self.get_current_operation())
 
     def revert_evaluation(self):
         if self.is_started():
@@ -690,10 +720,14 @@ class IfThenElseOperation(ComplexOperation):
         if self.get_index() == 0 and self.get_current_operation() != self.operations[0]:
             self.choices.pop()
             self.index[-1] = 0
+            if isinstance(self.get_current_operation(), CallOperation):
+                raise CallException(self.get_current_operation())
         else:
             self.get_current_operation().revert_evaluation()
             if self.get_current_operation().is_started() and self.get_index() > 0:
                 self.index[-1] -= 1
+                if isinstance(self.get_current_operation(), CallOperation):
+                    raise CallException(self.get_current_operation())
 
     def get_value(self):
         return None
@@ -722,6 +756,11 @@ class AttributeOperation(ComplexOperation):
         address = Operation.source_creator.get_prev_call().mapping[self.target][-1]
         value = Operation.memory_handler.reference_values[address][-1]
         getattr(value, self.attr)(*arguments)
+
+    def evaluate(self):
+        super(AttributeOperation, self).evaluate()
+        if self.is_ready():
+            self.parent_operation.handle_break()
 
     def revert_evaluation(self):
         if not self.is_started():
@@ -765,6 +804,8 @@ class BuiltinOperation(ComplexOperation):
 
     def evaluate(self):
         super(BuiltinOperation, self).evaluate()
+        if self.is_ready():
+            self.parent_operation.handle_break()
 
     def revert_evaluation(self):
         self.eval.pop()
