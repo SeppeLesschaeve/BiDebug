@@ -600,4 +600,9 @@ def main(b):
 
 main(2)   
 """
-    main(input_program)
+    file_name = "test.py"
+    f = open(file_name)
+    program = ""
+    for line in f.readlines():
+        program += line
+    main(program)

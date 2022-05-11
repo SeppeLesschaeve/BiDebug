@@ -1,7 +1,2 @@
-import ast
-
-t = ast.parse("""
-return
-""")
-if [None]:
-    print("o")
+a = 1
+b = 2
