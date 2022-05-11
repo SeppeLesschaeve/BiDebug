@@ -580,31 +580,21 @@ def main(source_program):
 
 if __name__ == '__main__':
     input_program = """
-a = 1
-b = a
-ll = [0, 9]
-len(ll)
-
-def div(d1, d2):
-    return d1 / d2
-
-
-def main(b):
-    for x in ll:
-        i = 0
-        while x > 4:
-            x = div(x, 2) - i
-    c = 2
-    while c > 0:
-        c -= 1
-        if c == 0:
-            break
-        else:
-            global a
-            a += 1
-    return None
-
-main(2)   
+def permutaties(lijst):
+    if lijst == []:
+        return []
+    perms = []
+    for i in range(len(lijst)):
+        left = []
+        for j in range(i):
+            left.append(lijst[j])
+        right = []
+        for j in range(i+1,len(lijst)):
+            right.append(lijst[j])
+        for rest in permutaties(left + right):
+            perms.append([lijst[i]] + rest)
+    return perms
+permutaties([1,2,3])
 """
     file_name = "test.py"
     f = open(file_name)

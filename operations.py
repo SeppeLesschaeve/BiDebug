@@ -840,7 +840,7 @@ class CallOperation(ComplexOperation):
                 else:
                     Operation.memory_handler.put_value(self.args[len(self.mapping)], True)
                 value = [Operation.memory_handler.address]
-            key = Operation.source_creator.functions[self.name].args[len(self.mapping)]
+            key = Operation.source_creator.get_function_args(self.name)[len(self.mapping)]
             self.mapping[key] = value
 
     def evaluate(self):
