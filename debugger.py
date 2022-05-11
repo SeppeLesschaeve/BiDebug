@@ -59,7 +59,7 @@ class SourceCreator(ast.NodeVisitor):
     def visit_Assign(self, node: Assign) -> Any:
         targets = []
         for target in node.targets:
-            targets.append(Name(target).id)
+            targets.append(target.id)
         ops = [self.visit(node.value)]
         assign_operation = operations.AssignOperation(targets, ops)
         for operation in ops:
@@ -68,7 +68,7 @@ class SourceCreator(ast.NodeVisitor):
 
     def visit_AugAssign(self, node: AugAssign) -> Any:
         ops = [self.visit(node.value)]
-        augassign_operation = operations.AugAssignOperation(Name(node.target).id, ops)
+        augassign_operation = operations.AugAssignOperation(node.target.id, ops)
         for operation in ops:
             operation.parent_operation = augassign_operation
         return augassign_operation
@@ -77,7 +77,7 @@ class SourceCreator(ast.NodeVisitor):
         return node
 
     def visit_For(self, node: For) -> Any:
-        target = Name(node.target).id
+        target = node.target.id
         ops = [self.visit(node.iter)]
         for statement in node.body:
             ops.append(self.visit(statement))
@@ -143,7 +143,7 @@ class SourceCreator(ast.NodeVisitor):
         return node
 
     def visit_Expr(self, node: Expr) -> Any:
-        return node
+        return self.visit(node.value)
 
     def visit_Pass(self, node: Pass) -> Any:
         return node
@@ -196,7 +196,7 @@ class SourceCreator(ast.NodeVisitor):
             values.append(self.visit(el))
         keys = []
         for key in node.keys:
-            keys.append(Constant(key).value)
+            keys.append(key.value)
         dict_operation = operations.DictOperation(keys, values)
         for value in values:
             value.parent_operation = dict_operation
@@ -247,7 +247,7 @@ class SourceCreator(ast.NodeVisitor):
     def visit_Call(self, node: Call) -> Any:
         ops = []
         if isinstance(node.func, Attribute):
-            target = Name(node.func.value).id
+            target = node.func.value.id
             attr = node.func.attr
             for argument in node.args:
                 ops.append(self.visit(argument))
@@ -462,9 +462,10 @@ class SourceCreator(ast.NodeVisitor):
         self.functions = {}
         self.tree = None
         self.call_stack = []
-        self.index = -1
+        self.index = 0
         self.build_tree(text)
         self.initialize_stack()
+        operations.Operation.source_creator = self
 
     def build_tree(self, text):
         self.tree = ast.parse(text)
@@ -487,8 +488,10 @@ class SourceCreator(ast.NodeVisitor):
     def initialize_stack(self):
         copy_of_operations = copy.deepcopy(self.get_function_operations('boot'))
         call_operation = operations.CallOperation('boot', self.get_function_args('boot'), copy_of_operations)
-        self.insert(call_operation)
-        self.index = 0
+        for operation in call_operation.operations:
+            operation.parent_operation = call_operation
+        self.call_stack.insert(self.index, call_operation)
+        call_operation.initialize()
 
     def get_control_call(self):
         return self.call_stack[self.index]
@@ -542,6 +545,7 @@ class Debugger:
             self.source_creator.get_control_call().get_current_operation().parent_operation.handle_break()
 
     def execute_backward(self):
+        self.source_creator.get_control_call().go_back()
         try:
             self.source_creator.get_control_call().get_current_operation().revert_evaluation()
         except operations.ReturnException:
@@ -558,12 +562,10 @@ def main(source_program):
         try:
             debugger.execute()
             for key, value in source_creator.get_control_call().mapping.items():
-                value = operations.Operation.memory_handler.get_value(source_creator.get_control_call().mapping[key])
+                value = operations.Operation.memory_handler.get_value(value[-1])
                 print(key, ' : ', value)
         except StopException:
             break
-        except Exception:
-            print(debugger.source_creator.get_control_call())
 
 
 if __name__ == '__main__':
