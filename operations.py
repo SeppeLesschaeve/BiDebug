@@ -839,13 +839,15 @@ class CallOperation(ComplexOperation):
                     Operation.memory_handler.put_value(self.args[len(self.mapping)], False)
                 else:
                     Operation.memory_handler.put_value(self.args[len(self.mapping)], True)
-                value = [Operation.memory_handler.address]
+                value = [Operation.memory_handler.address - 1]
             key = Operation.source_creator.get_function_args(self.name)[len(self.mapping)]
             self.mapping[key] = value
 
     def evaluate(self):
         while len(self.mapping) < len(self.args):
             self.evaluate_mapping()
+        else:
+            raise CallException(self)
         super(CallOperation, self).evaluate()
 
     def revert_evaluation(self):

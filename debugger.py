@@ -579,7 +579,7 @@ def main(source_program):
 
 
 if __name__ == '__main__':
-    file_name = "test_3.py"
+    file_name = "test_2.py"
     f = open(file_name)
     program = ""
     for line in f.readlines():
