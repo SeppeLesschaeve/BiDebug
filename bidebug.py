@@ -1,5 +1,6 @@
 import sourceConstructor
 import ast
+from getch import getch
 
 class bidebug:
     def __init__(self,source):
@@ -29,7 +30,7 @@ def main(program):
     debugger = bidebug(program)
     response = 0
     while response != "3":
-        response = input()
+        response = getch()
         if response == "1":
             debugger.advance()
             print(debugger.get_current_state())
@@ -42,7 +43,7 @@ def main(program):
             print("commands:\n\t1 to advance\n\t2 to revert\n\t3 to quit")
 
 if __name__ == '__main__':
-    file_name = "test_3.py"
+    file_name = "test_2.py"
     f = open(file_name)
     program = ""
     for line in f.readlines():

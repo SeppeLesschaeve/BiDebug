@@ -13,4 +13,4 @@ def permutaties(lijst):
         for rest in andere_perms:
             perms.append([lijst[i]] + rest)
     return perms
-permutaties([1,2,3])
+print(permutaties([1,2,3]))

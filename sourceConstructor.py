@@ -398,6 +398,10 @@ class SourceVisitor(ast.NodeVisitor):
         funcenv = SourceVisitor(self.bidebugger,ts)
         for statement in SourceVisitor.funcs[node.func.id][1]:
             funcenv.visit(statement)
+            if funcenv.returnValue != None:
+                funcenv.source["returned"] = funcenv.returnValue
+                self.bidebugger.add_state(funcenv.source)
+                break
         for key in self.referencePool:
             self.source[self.referencePool[key]] = funcenv.source[key]
         #print("return from: %s"%(node.func.id))
