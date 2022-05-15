@@ -9,7 +9,8 @@ def permutaties(lijst):
         right = []
         for j in range(i+1,len(lijst)):
             right.append(lijst[j])
-        for rest in permutaties(left + right):
+        andere_perms = permutaties(left + right)
+        for rest in andere_perms:
             perms.append([lijst[i]] + rest)
     return perms
-permutaties(3)
+print(permutaties([1,2,3]))

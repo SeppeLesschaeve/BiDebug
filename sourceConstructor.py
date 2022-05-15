@@ -1,5 +1,9 @@
 import ast
+import builtins
+from tokenize import String
 
+def noop(a):
+    pass
 
 immutables = {tuple,int,float,complex,str,bytes}
 class SourceVisitor(ast.NodeVisitor):
@@ -39,10 +43,11 @@ class SourceVisitor(ast.NodeVisitor):
             return None
 
     """Constructor"""
-    def __init__(self,source={}):
+    def __init__(self,bidebugger,source={}):
         self.source = source
         self.referencePool = {}
         self.returnValue = None
+        self.bidebugger = bidebugger
     
     """Methods"""
     def unpack(self,v):
@@ -99,12 +104,14 @@ class SourceVisitor(ast.NodeVisitor):
                         SourceVisitor.globals[visitedTarget[i]] = visitedValue[i]
                         continue
                     self.source[visitedTarget[i]] = visitedValue[i]
+                    self.bidebugger.add_state(self.copy_source())
             else:   #Nog support nodig voor target geïndexeerd met slice of index!
                     #Anders kunnen we bijv. niet a[1] = 2 of a[1:2] = [2] doen
                 if visitedTarget in SourceVisitor.globals and visitedTarget not in self.source:
                     SourceVisitor.globals[visitedTarget] = self.unpack(node.value)
                 else:
                     self.source[self.visit(target)] = self.unpack(node.value)
+                    self.bidebugger.add_state(self.copy_source())
             self.printSource()
 
     def visit_Add(self, node):
@@ -138,6 +145,7 @@ class SourceVisitor(ast.NodeVisitor):
             visitedTarget = self.visit(node.target)
             if visitedTarget in self.source:
                 self.source[visitedTarget] = f(self.source[visitedTarget],unpackedValue)
+                self.bidebugger.add_state(self.copy_source())
             elif visitedTarget in SourceVisitor.globals:
                 SourceVisitor.globals[visitedTarget] = f(SourceVisitor.globals[visitedTarget],unpackedValue)
         elif isinstance(node.target,ast.Subscript):
@@ -154,6 +162,7 @@ class SourceVisitor(ast.NodeVisitor):
                     raise ValueError("Index Undefined")
                 if collectionName in self.source:
                     self.source[collectionName][index] = f(self.source[collectionName][index],unpackedValue)
+                    self.bidebugger.add_state(self.copy_source())
                 elif collectionName in SourceVisitor.globals:
                     SourceVisitor.globals[collectionName][index] = f(self.source[collectionName][index],unpackedValue)
             else:
@@ -276,6 +285,21 @@ class SourceVisitor(ast.NodeVisitor):
         """Visits the expression contained by the node."""
         self.visit(node.value)
 
+    def visit_UnaryOp(self, node):
+        return self.visit(node.op)(self.visit(node.operand))
+    
+    def visit_UAdd(self, node):
+        return lambda a: 0+a
+    
+    def visit_USub(self, node):
+        return lambda a: 0-a
+    
+    def visit_Not(self, node):
+        return lambda a: not a
+    
+    def visit_Invert(self,node):
+        return lambda a: ~a
+
     def visit_BinOp(self, node):
         """Visits the binary operation contained by the node."""
         lefthand = self.unpack(node.left)
@@ -367,15 +391,20 @@ class SourceVisitor(ast.NodeVisitor):
         """
         if self.isBuiltin(node):
             return self.visit_Builtin(node)
-        print("function call: %s"%(node.func.id))
+        #print("function call: %s"%(node.func.id))
+        
         self.makeReferencePool(node)
         ts = self.buildTempSource(node)
-        funcenv = SourceVisitor(ts)
+        funcenv = SourceVisitor(self.bidebugger,ts)
         for statement in SourceVisitor.funcs[node.func.id][1]:
             funcenv.visit(statement)
+            if funcenv.returnValue != None:
+                funcenv.source["returned"] = funcenv.returnValue
+                self.bidebugger.add_state(funcenv.source)
+                break
         for key in self.referencePool:
             self.source[self.referencePool[key]] = funcenv.source[key]
-        print("return from: %s"%(node.func.id))
+        #print("return from: %s"%(node.func.id))
         return funcenv.returnValue
         
 
@@ -385,7 +414,7 @@ class SourceVisitor(ast.NodeVisitor):
 
     def visit_Return(self, node):
         """Visits a return statement and assigns its evaluated value to the class' return value field."""
-        self.returnValue = self.visit(node.value)
+        self.returnValue = self.unpack(node.value)
 
     #The iterator must be a deep copy of the associated element of the list.
     def visit_For(self, node):
@@ -427,13 +456,15 @@ class SourceVisitor(ast.NodeVisitor):
         arguments = []
         for arg in node.args:
             arguments.append(self.unpack(arg))
+        if isinstance(node.func,ast.Name) and node.func.id == "print":
+            return noop(*arguments)
         if isinstance(node.func, ast.Attribute):    #Dit valt voor wanneer de functie opgeroepen wordt op een object
             if node.func.value.id in self.source:
                 return getattr(self.source[self.visit(node.func.value)], node.func.attr)(*arguments)
             elif node.func.value.id in SourceVisitor.globals:
                 return getattr(SourceVisitor.globals[node.func.value.id], node.func.attr)(*arguments)
         if isinstance(node.func, ast.Name):
-            return getattr(__builtins__, node.func.id)(*arguments)
+            return getattr(builtins, node.func.id)(*arguments)
 
     def buildTempSource(self, node):
         """
@@ -450,7 +481,7 @@ class SourceVisitor(ast.NodeVisitor):
         if isinstance(node.args, list):
             for i in range(0, len(node.args)):
                 visitedArg = self.visit(node.args[i])
-                if visitedArg in self.source:
+                if isinstance(visitedArg,str) and visitedArg in self.source:
                     tempSource[argnames[i]] = self.source[visitedArg]
                 else:
                     tempSource[argnames[i]] = visitedArg
@@ -494,7 +525,7 @@ class SourceVisitor(ast.NodeVisitor):
             raise RuntimeError("Incorrect function call: arguments are not in a list.")
         for i,arg in enumerate(node.args):
             visitedArg = self.visit(arg)
-            if visitedArg in self.source and not self.is_immutable(self.source[visitedArg]):
+            if isinstance(visitedArg,str) and visitedArg in self.source and not self.is_immutable(self.source[visitedArg]):
                 references[SourceVisitor.funcs[node.func.id][0][i]] = visitedArg
         for arg in node.keywords:
             references[arg.arg] = self.visit(arg.value)
@@ -506,7 +537,7 @@ class SourceVisitor(ast.NodeVisitor):
                or (isinstance(node.func, ast.Name) and not SourceVisitor.funcs.get(node.func.id,False))
 
     def printSource(self):
-        pSource = {}
+        """pSource = {}
         for entry in self.source:
             pSource[entry] = self.source[entry]
         for entry in SourceVisitor.globals:
@@ -516,14 +547,18 @@ class SourceVisitor(ast.NodeVisitor):
             pSource[entry] = SourceVisitor.globals[entry]
         for f in SourceVisitor.funcs:
             pSource[f] = (len(SourceVisitor.funcs[f][0]),len(SourceVisitor.funcs[f][1]))
-        print(pSource)
+        print(pSource)"""
+        pass
+    
+    def copy_source(self):
+        return dict(self.source)
 
-def main(source):
+"""def main(source):
     tree = ast.parse(source)
     #print(ast.dump(tree))
     usage_analyzer = SourceVisitor()
     usage_analyzer.visit(tree)
-    #print(usage_analyzer.source)
+    #print(usage_analyzer.source)"""
 
 
 if __name__ == '__main__':
@@ -538,4 +573,4 @@ print(fibonnaci(3))
     simpel_voorbeeld = """
 a = 1
 a = a + 1"""
-    main(text)
+    #main(text)

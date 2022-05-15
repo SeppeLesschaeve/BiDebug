@@ -6,4 +6,3 @@ def fibonacci(n):
 
 for i in range(10):
     print(fibonacci(i))
-fibonacci(3)
