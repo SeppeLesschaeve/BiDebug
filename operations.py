@@ -44,7 +44,8 @@ class CallException(Exception):
 
 class ReturnException(Exception):
 
-    def __init__(self):
+    def __init__(self, return_value):
+        self.return_value = return_value
         super(ReturnException, self).__init__('Reyturn')
 
 
@@ -56,65 +57,31 @@ class StartException(Exception):
 
 class Operation:
 
-    memory_handler = MemoryHandler()
-    source_creator = None
+    debugger = None
 
     def __init__(self):
-        self.parent_operation = None
-        self.evaluation_history = []
+        self.parent = None
 
-    def is_mutable(self):
-        return False
-
-    def is_ready(self):
-        return self.evaluation_history and self.evaluation_history[-1]
-
-    def is_started(self):
-        return not self.evaluation_history or not self.evaluation_history[-1]
-
-    def get_current_operation(self):
+    def get_current(self):
         return None
-
-    def initialize(self):
-        self.evaluation_history.append(True)
-
-    def finalize(self):
-        self.evaluation_history.pop()
 
     def evaluate(self):
         return
 
-    def finish_evaluation(self):
-        return
-
-    def revert_evaluation(self):
+    def revert(self):
         return
 
     def get_call(self):
-        return Operation.source_creator.get_control_call()
-
-    def go_back(self):
-        return
+        return Operation.debugger.get_call()
 
 
 class SingleOperation(Operation):
 
     def __init__(self):
-        self.eval = []
         Operation.__init__(self)
 
-    def get_current_operation(self):
+    def get_current(self):
         return self
-
-    def revert_evaluation(self):
-        self.eval.pop()
-        if self.evaluation_history:
-            self.evaluation_history[-1] = False
-
-    def get_value(self):
-        if self.eval:
-            return self.eval[-1]
-        return None
 
 
 class ComplexOperation(Operation):
@@ -127,71 +94,51 @@ class ComplexOperation(Operation):
     def get_index(self):
         return self.index[-1]
 
-    def is_ready(self):
-        return self.index and self.get_index() == len(self.operations) - 1 and self.get_current_operation().is_ready()
-
-    def get_current_operation(self):
+    def get_current(self):
         return self.operations[self.get_index()]
 
     def initialize(self):
         self.index.append(0)
-        super(ComplexOperation, self).initialize()
+
+    def finalize(self):
+        self.index.pop()
 
     def evaluate(self):
-        if self.is_started():
-            self.initialize()
-        self.get_current_operation().evaluate()
-        if self.get_current_operation().is_ready():
-            self.get_current_operation().finish_evaluation()
-            if not self.is_ready():
-                self.index[-1] += 1
-                if isinstance(self.get_current_operation(), CallOperation):
-                    raise CallException(self.get_current_operation())
-            else:
-                self.finish_evaluation()
+        self.get_current().evaluate()
 
-    def finish_evaluation(self):
+    def finish(self):
         return
 
-    def revert_evaluation(self):
-        if not self.is_started():
-            self.get_current_operation().revert_evaluation()
-            if self.get_current_operation().is_started():
-                self.get_current_operation().finalize()
-                if self.get_index() > 0:
-                    self.index[-1] -= 1
-                    if isinstance(self.get_current_operation(), CallOperation):
-                        raise CallException(self.get_current_operation())
-                else:
-                    self.finalize()
+    def revert(self):
+        self.get_current().revert()
 
-    def get_value(self):
-        if self.is_ready():
-            return self.get_current_operation().get_value()
-        return None
+    def next_operation(self):
+        Operation.debugger.next_operation_complex(self)
 
-    def go_back(self):
-        if self.get_index() == 0:
-            if not self.parent_operation:
-                raise StartException
-            self.parent_operation.go_back()
-        else:
-            self.index[-1] -= 1
-            if isinstance(self.get_current_operation(), CallOperation):
-                raise CallException(self.get_current_operation())
+    def prev_operation(self):
+        Operation.debugger.prev_operation_complex(self)
 
-    def handle_back(self):
-        if not self.is_started():
-            self.index[-1] -= 1
-            if isinstance(self.get_current_operation(), CallOperation):
-                raise CallException(self.get_current_operation())
-            self.revert_evaluation()
 
-    def handle_break(self):
-        if not self.is_ready():
-            self.index[-1] += 1
-            if isinstance(self.get_current_operation(), CallOperation):
-                raise CallException(self.get_current_operation())
+class ComputingOperation(ComplexOperation):
+
+    def __init__(self, operations):
+        self.temporary_values = []
+        super(ComputingOperation, self).__init__(operations)
+
+    def is_evaluated(self):
+        return False
+
+    def add_temp_result(self, temp_result):
+        self.temporary_values.append(temp_result)
+
+    def initialize(self):
+        self.temporary_values = []
+
+    def next_operation(self):
+        Operation.debugger.next_operation_computing(self)
+
+    def prev_operation(self):
+        Operation.debugger.prev_operation_computing(self)
 
 
 class BreakOperation(SingleOperation):
@@ -203,7 +150,6 @@ class BreakOperation(SingleOperation):
         raise BreakException
 
 
-
 class ConstantOperation(SingleOperation):
 
     def __init__(self, value):
@@ -211,9 +157,7 @@ class ConstantOperation(SingleOperation):
         SingleOperation.__init__(self)
 
     def evaluate(self):
-        if self.is_started():
-            self.initialize()
-        self.eval.append(self.value)
+        return True, self.value
 
 
 class NameOperation(SingleOperation):
@@ -222,20 +166,8 @@ class NameOperation(SingleOperation):
         self.name = name
         SingleOperation.__init__(self)
 
-    def is_mutable(self):
-        if self.eval:
-            address = self.get_call().mapping[self.name][-1]
-            return Operation.memory_handler.is_mutable(address)
-        else:
-            super(NameOperation, self).is_mutable()
-
     def evaluate(self):
-        if self.is_started():
-            self.initialize()
-        self.eval.append(self.get_referenced_value())
-
-    def get_referenced_value(self):
-        return self.get_call().get_referenced_value(self.name)
+        return True, self.get_call().get_referenced_value(self.name)
 
 
 class ReturnOperation(ComplexOperation):
@@ -243,308 +175,213 @@ class ReturnOperation(ComplexOperation):
     def __init__(self, operations):
         ComplexOperation.__init__(self, operations)
 
-    def is_ready(self):
-        if self.operations:
-            super(ReturnOperation, self).is_ready()
-        return True
-
-    def is_started(self):
-        if self.operations:
-            return self.operations[0].is_started()
-        return True
-
     def evaluate(self):
-        if self.is_started():
-            self.initialize()
-        if self.operations:
-            super(ReturnOperation, self).evaluate()
-
-    def finish_evaluation(self):
-        if self.operations:
-            self.get_call().add_result(self.get_current_operation().get_value())
+        if not self.get_current():
+            return True, None
         else:
-            self.get_call().add_result(None)
-        raise ReturnException
-
-    def revert_evaluation(self):
-        if self.operations:
-            self.operations[0].eval.pop()
-
-    def get_value(self):
-        if self.operations:
-            return super(ReturnOperation, self).get_value()
-        else:
-            return None
+            result = self.get_current().evaluate()
+            if result[0]:
+                raise ReturnException(result[1])
 
 
-class BinaryOperation(ComplexOperation):
+class BinaryOperation(ComputingOperation):
 
     def __init__(self, op, operations):
         self.op = op
-        self.eval = []
-        ComplexOperation.__init__(self, operations)
+        ComputingOperation.__init__(self, operations)
+
+    def is_evaluated(self):
+        return len(self.temporary_values) == 2
 
     def evaluate(self):
-        if self.is_started():
-            self.initialize()
-        while not self.is_ready():
-            super(BinaryOperation, self).evaluate()
-
-    def finish_evaluation(self):
-        self.eval.append(self.op(self.operations[0].get_value(), self.operations[1].get_value()))
-
-    def revert_evaluation(self):
-        super(BinaryOperation, self).revert_evaluation()
-        if self.is_started():
-            self.eval.pop()
-
-    def get_value(self):
-        if self.is_ready():
-            return self.eval[-1]
-        return None
+        while not self.is_evaluated():
+            evaluation = self.get_current().evaluate()
+            if evaluation[0]:
+                self.add_temp_result(evaluation[1])
+                self.next_operation()
+        else:
+            result = self.op(self.temporary_values[0], self.temporary_values[1])
+            self.temporary_values = []
+            return True, result
 
 
-class BooleanOperation(ComplexOperation):
+class BooleanOperation(ComputingOperation):
 
     def __init__(self, op, operations):
         self.op = op
-        self.eval = []
-        ComplexOperation.__init__(self, operations)
+        ComputingOperation.__init__(self, operations)
+
+    def is_evaluated(self):
+        return len(self.temporary_values) == 2
 
     def evaluate(self):
-        if self.is_started():
-            self.initialize()
-        while not self.is_ready():
-            super(BooleanOperation, self).evaluate()
-
-    def finish_evaluation(self):
-        self.eval.append(self.op(self.operations[0].get_value(), self.operations[1].get_value()))
-
-    def revert_evaluation(self):
-        super(BooleanOperation, self).revert_evaluation()
-        if self.is_started():
-            self.eval.pop()
-
-    def get_value(self):
-        if self.is_ready():
-            return self.eval[-1]
-        return None
+        while not self.is_evaluated():
+            evaluation = self.get_current().evaluate()
+            if evaluation[0]:
+                self.add_temp_result(evaluation[1])
+                self.next_operation()
+        else:
+            result = self.op(self.temporary_values[0], self.temporary_values[1])
+            self.temporary_values = []
+            return True, result
 
 
-class CompareOperation(ComplexOperation):
+class CompareOperation(ComputingOperation):
 
     def __init__(self, comparisons, operations):
         self.comparisons = comparisons
-        self.eval = []
-        ComplexOperation.__init__(self, operations)
+        ComputingOperation.__init__(self, operations)
 
-    def finish_evaluation(self):
-        value = True
-        for i in range(len(self.comparisons)):
-            value = value and self.comparisons[i](self.operations[i].get_value(), self.operations[i + 1].get_value())
-        self.eval.append(value)
+    def is_evaluated(self):
+        return len(self.temporary_values) == len(self.operations)
 
     def evaluate(self):
-        if self.is_started():
-            self.initialize()
-        while not self.is_ready():
-            super(CompareOperation, self).evaluate()
-
-    def revert_evaluation(self):
-        super(CompareOperation, self).revert_evaluation()
-        if self.is_started():
-            self.eval.pop()
-
-    def get_value(self):
-        if self.is_ready():
-            return self.eval[-1]
-        return False
+        while not self.is_evaluated():
+            evaluation = self.get_current().evaluate()
+            if evaluation[0]:
+                self.add_temp_result(evaluation[1])
+                self.next_operation()
+        else:
+            result = True
+            for i in range(len(self.comparisons)):
+                result = result and self.comparisons[i](self.temporary_values[i], self.temporary_values[i + 1])
+            self.temporary_values = []
+            return True, result
 
 
-class SubscriptOperation(ComplexOperation):
+class SubscriptOperation(ComputingOperation):
 
     def __init__(self, operations):
-        self.eval = []
         ComplexOperation.__init__(self, operations)
 
+    def is_evaluated(self):
+        return len(self.temporary_values) == 2
+
     def evaluate(self):
-        if self.is_started():
-            self.initialize()
-        while not self.is_ready():
-            super(SubscriptOperation, self).evaluate()
-
-    def finish_evaluation(self):
-        self.eval.append(self.operations[0].get_value()[self.operations[1].get_value()])
-
-    def revert_evaluation(self):
-        super(SubscriptOperation, self).revert_evaluation()
-        if self.is_started():
-            self.eval.pop()
-
-    def get_value(self):
-        if self.is_ready():
-            return self.eval[-1]
-        return False
+        while not self.is_evaluated():
+            evaluation = self.get_current().evaluate()
+            if evaluation[0]:
+                self.add_temp_result(evaluation[1])
+                self.next_operation()
+        else:
+            result = self.temporary_values[0][self.temporary_values[1]]
+            self.temporary_values = []
+            return True, result
 
 
-class AugAssignOperation(ComplexOperation):
+class AugAssignOperation(ComputingOperation):
 
     def __init__(self, target, operations):
         self.target = target
-        ComplexOperation.__init__(self, operations)
+        ComputingOperation.__init__(self, operations)
 
-    def finish_evaluation(self):
-        self.get_call().update_target(self.target, self.get_current_operation().get_value(),
-                                      self.get_current_operation().is_mutable())
+    def is_evaluated(self):
+        return len(self.temporary_values) == 1
 
     def evaluate(self):
-        super(AugAssignOperation, self).evaluate()
-        if self.is_ready():
-            raise BreakException
+        while not self.is_evaluated():
+            evaluation = self.get_current().evaluate()
+            if evaluation[0]:
+                self.add_temp_result(evaluation[1])
+                self.next_operation()
+        else:
+            self.get_call().update_target(self.target, self.temporary_values[0])
+            self.temporary_values = []
+            self.parent.next_operation()
 
     def revert_evaluation(self):
-        super(AugAssignOperation, self).revert_evaluation()
-        if self.is_started():
-            self.get_call().revert_target(self.target)
+        self.get_call().revert_target(self.target)
+        self.finalize()
+        self.parent.prev_operation()
 
 
-class AssignOperation(ComplexOperation):
+class AssignOperation(ComputingOperation):
 
     def __init__(self, targets, operations):
         self.targets = targets
-        ComplexOperation.__init__(self, operations)
+        ComputingOperation.__init__(self, operations)
 
-    def finish_evaluation(self):
-        self.get_call().update_targets(self.targets, self.get_current_operation().get_value(),
-                                       self.get_current_operation().is_mutable())
+    def is_evaluated(self):
+        return len(self.temporary_values) == 1
 
     def evaluate(self):
-        super(AssignOperation, self).evaluate()
-        if self.is_ready():
-            raise BreakException
+        while not self.is_evaluated():
+            evaluation = self.get_current().evaluate()
+            if evaluation[0]:
+                self.add_temp_result(evaluation[1])
+                self.next_operation()
+        else:
+            self.get_call().update_targets(self.targets, self.temporary_values[0])
+            self.temporary_values = []
+            self.parent.next_operation()
 
     def revert_evaluation(self):
-        super(AssignOperation, self).revert_evaluation()
-        if self.is_started():
-            self.get_call().revert_targets(self.targets)
+        self.get_call().revert_targets(self.targets)
+        self.finalize()
+        self.parent.prev_operation()
 
 
-class ListOperation(ComplexOperation):
+class ListOperation(ComputingOperation):
 
     def __init__(self, operations):
-        self.eval = []
-        ComplexOperation.__init__(self, operations)
+        ComputingOperation.__init__(self, operations)
 
-    def is_mutable(self):
-        return True
+    def is_evaluated(self):
+        return len(self.temporary_values) == len(self.operations)
 
     def evaluate(self):
-        if self.is_started():
-            self.initialize()
-        if not self.operations:
-            return
-        while not self.is_ready():
-            super(ListOperation, self).evaluate()
-
-    def is_ready(self):
-        if self.operations:
-            return super(ListOperation, self).is_ready()
-        return True
-
-    def finish_evaluation(self):
-        value = []
-        for i in range(len(self.operations)):
-            value.append(self.operations[i].get_value())
-        self.eval.append(value)
-
-    def revert_evaluation(self):
-        super(ListOperation, self).revert_evaluation()
-        if self.is_started():
-            self.eval.pop()
-
-    def get_value(self):
-        if self.is_ready():
-            return self.eval[-1]
-        return False
+        while not self.is_evaluated():
+            evaluation = self.get_current().evaluate()
+            if evaluation[0]:
+                self.add_temp_result(evaluation[1])
+                self.next_operation()
+        else:
+            result = [i for i in self.temporary_values]
+            self.temporary_values = []
+            return True, result
 
 
-class SetOperation(ComplexOperation):
+class SetOperation(ComputingOperation):
 
     def __init__(self, operations):
-        self.eval = []
-        ComplexOperation.__init__(self, operations)
+        ComputingOperation.__init__(self, operations)
 
-    def is_mutable(self):
-        return True
-
-    def is_ready(self):
-        if self.operations:
-            return super(SetOperation, self).is_ready()
-        return True
+    def is_evaluated(self):
+        return len(self.temporary_values) == len(self.operations)
 
     def evaluate(self):
-        if self.is_started():
-            self.initialize()
-        if not self.operations:
-            return
-        while not self.is_ready():
-            super(SetOperation, self).evaluate()
-
-    def finish_evaluation(self):
-        value = set()
-        for i in range(len(self.operations)):
-            value.add(self.operations[i].get_value())
-        self.eval.append(value)
-
-    def revert_evaluation(self):
-        super(SetOperation, self).revert_evaluation()
-        if self.is_started():
-            self.eval.pop()
-
-    def get_value(self):
-        if self.is_ready():
-            return self.eval[-1]
-        return False
+        while not self.is_evaluated():
+            evaluation = self.get_current().evaluate()
+            if evaluation[0]:
+                self.add_temp_result(evaluation[1])
+                self.next_operation()
+        else:
+            result = {i for i in self.temporary_values}
+            self.temporary_values = []
+            return True, result
 
 
-class DictOperation(ComplexOperation):
+class DictOperation(ComputingOperation):
 
     def __init__(self, keys, operations):
         self.keys = keys
-        self.eval = []
-        ComplexOperation.__init__(self, operations)
+        ComputingOperation.__init__(self, operations)
 
-    def is_mutable(self):
-        return True
-
-    def is_ready(self):
-        if self.operations:
-            return super(DictOperation, self).is_ready()
-        return True
+    def is_evaluated(self):
+        return len(self.temporary_values) == len(self.operations)
 
     def evaluate(self):
-        if self.is_started():
-            self.initialize()
-        if not self.operations:
-            return
-        while not self.is_ready():
-            super(DictOperation, self).evaluate()
-
-    def finish_evaluation(self):
-        value = {}
-        for i in range(len(self.operations)):
-            value[self.keys[i]] = self.operations[i].get_value()
-        self.eval.append(value)
-
-    def revert_evaluation(self):
-        super(DictOperation, self).revert_evaluation()
-        if self.is_started():
-            self.eval.pop()
-
-    def get_value(self):
-        if self.is_ready():
-            return self.eval[-1]
-        return False
+        while not self.is_evaluated():
+            evaluation = self.get_current().evaluate()
+            if evaluation[0]:
+                self.add_temp_result(evaluation[1])
+                self.next_operation()
+        else:
+            result = {}
+            for i in self.temporary_values:
+                result[self.keys[i]] = self.temporary_values[i]
+            self.temporary_values = []
+            return True, result
 
 
 class WhileOperation(ComplexOperation):
@@ -553,268 +390,180 @@ class WhileOperation(ComplexOperation):
         self.number = []
         ComplexOperation.__init__(self, operations)
 
-    def is_ready(self):
-        return self.get_index() == 0 and not self.operations[0].get_value()
+    def initialize(self):
+        self.number.append(0)
+        super(WhileOperation, self).initialize()
 
-    def is_started(self):
-        return super(WhileOperation, self).is_started() and self.number[-1] == 0
+    def finalize(self):
+        self.number.pop()
+        super(WhileOperation, self).finalize()
 
     def evaluate(self):
-        if self.is_started():
-            self.initialize()
-        self.get_current_operation().evaluate()
-        if self.is_ready():
-            raise BreakException
-        if self.get_index() == 0 and self.operations[0].get_value():
-            self.index[-1] += 1
-            if isinstance(self.get_current_operation(), CallOperation):
-                raise CallException(self.get_current_operation())
-        elif self.get_current_operation().is_ready():
-            self.get_current_operation().finish_evaluation()
-            if self.get_index() < len(self.operations) - 1:
-                self.index[-1] += 1
-                if isinstance(self.get_current_operation(), CallOperation):
-                    raise CallException(self.get_current_operation())
-            else:
-                self.finish_evaluation()
-
-    def finish_evaluation(self):
-        self.number[-1] += 1
-        self.index[-1] = 0
-        if isinstance(self.get_current_operation(), CallOperation):
-            raise CallException(self.get_current_operation())
+        if self.get_index() == 0:
+            evaluation = self.get_current().evaluate()
+            if evaluation[0]:
+                self.next_operation()
+                self.number[-1] += 1
+            elif evaluation[1]:
+                self.parent.next_operation()
+        else:
+            evaluation = self.get_current().evaluate()
+            if evaluation[0]:
+                self.next_operation()
 
     def revert_evaluation(self):
-        if self.is_started():
-            raise BackwardException
-        if self.get_index() == 0 and self.number[-1] > 0:
+        if self.get_index() == 0 and self.number[-1] == 0:
+            self.finalize()
+            self.parent.prev_operation()
+        elif self.get_index() == 0 and self.number[-1] > 0:
             self.number[-1] -= 1
-            self.index[-1] = len(self.operations) - 1
-            if isinstance(self.get_current_operation(), CallOperation):
-                raise CallException(self.get_current_operation())
+            self.prev_operation()
         else:
-            self.get_current_operation().revert_evaluation()
-            if self.get_current_operation().is_started() and self.get_index() > 0:
-                self.index[-1] -= 1
-                if isinstance(self.get_current_operation(), CallOperation):
-                    raise CallException(self.get_current_operation())
-
-    def get_value(self):
-        return None
+            self.get_current().revert()
 
 
 class ForOperation(ComplexOperation):
 
     def __init__(self, target, operations):
         self.target = target
-        self.iterations = []
+        self.iter = []
+        self.iterable = []
         ComplexOperation.__init__(self, operations)
 
-    def is_ready(self):
-        return super(ForOperation, self).is_ready() \
-               and self.iterations[-1] == len(self.operations[0].get_value()) - 1
+    def initialize(self):
+        self.iter.append(0)
+        super(ForOperation, self).initialize()
+
+    def finalize(self):
+        self.iter.pop()
+        self.iterable.pop()
+        super(ForOperation, self).finalize()
 
     def evaluate(self):
-        if self.is_started():
-            self.initialize()
         if self.get_index() == 0:
-            self.iterations.append(-1)
-        self.get_current_operation().evaluate()
-        if self.get_index() == 0:
-            self.get_call().update_target(self.target, self.operations[0].get_value()[self.iterations[-1]],
-                                          self.get_current_operation().is_mutable())
-        if super(ForOperation, self).is_ready():
-            if not self.is_ready():
-                self.iterations[-1] += 1
-                self.get_call().update_target(self.target, self.operations[0].get_value()[self.iterations[-1]],
-                                              self.get_current_operation().is_mutable())
-                self.index[-1] += 1
-                if isinstance(self.get_current_operation(), CallOperation):
-                    raise CallException(self.get_current_operation())
+            evaluation = self.get_current().evaluate()
+            if evaluation[0]:
+                self.next_operation()
+                self.iterable.append(evaluation[1])
+        if self.get_index() == 1:
+            self.get_call().update_target(self.target, self.iterable[-1][self.iter[-1]])
+            evaluation = self.get_current().evaluate()
+            if evaluation[0]:
+                self.next_operation()
+        else:
+            evaluation = self.get_current().evaluate()
+            if evaluation[0]:
+                self.next_operation()
 
     def revert_evaluation(self):
-        if self.is_started():
-            raise BreakException
-        self.get_current_operation().revert_evaluation()
-        if self.get_index() == 1 and self.get_current_operation().is_started():
-            if self.iterations[-1] > 0:
-                self.iterations[-1] -= 1
-                self.get_call().revert_target(self.target)
-                self.index[-1] = len(self.operations) - 1
-                if isinstance(self.get_current_operation(), CallOperation):
-                    raise CallException(self.get_current_operation())
-        elif self.get_current_operation().is_started():
-            self.index[-1] -= 1
-            if isinstance(self.get_current_operation(), CallOperation):
-                raise CallException(self.get_current_operation())
-
-    def get_value(self):
-        return None
+        if self.get_index() == 1 and self.iter[-1] == 0:
+            self.finalize()
+            self.parent.prev_operation()
+        elif self.get_index() == 1 and self.iter[-1] > 0:
+            self.get_current().revert()
+            self.iter[-1] -= 1
+            self.get_call().revert_target(self.target)
+            self.prev_operation()
+        else:
+            self.get_current().revert()
 
 
 class IfThenElseOperation(ComplexOperation):
 
-    def __init__(self, operations):
+    def __init__(self, else_index, operations):
         self.choices = []
-        self.part_index = []
-        self.then_part = operations[1]
-        self.else_part = operations[2]
+        self.then_index = 1
+        self.else_index = else_index
         ComplexOperation.__init__(self, operations)
-        self.index.append(0)
-
-    def get_index(self):
-        if super(IfThenElseOperation, self).get_index() == 0:
-            return 0
-        else:
-            return self.part_index[-1]
-
-    def is_ready(self):
-        if self.part_index:
-            if self.choices[-1]:
-                return self.get_index() == len(self.then_part) and self.get_current_operation().is_ready()
-            else:
-                return self.get_index() == len(self.else_part) and self.get_current_operation().is_ready()
-        return False
-
-    def is_started(self):
-        if not self.part_index:
-            return True
-        return self.get_index() == 0 and self.get_current_operation().is_started()
-
-    def get_current_operation(self):
-        if self.get_index() == 0:
-            return self.operations[0].get_current_operation()
-        elif self.choices[-1]:
-            return self.operations[1][self.get_index()].get_current_operation()
-        else:
-            return self.operations[2][self.get_index()].get_current_operation()
-
-    def get_last_index(self):
-        if self.choices[-1]:
-            return len(self.operations[1])
-        else:
-            return len(self.operations[2])
 
     def evaluate(self):
-        if self.is_started():
-            self.initialize()
-        self.get_current_operation().evaluate()
-        if self.is_ready():
-            raise BreakException
-        if self.get_index() == 0 and self.get_current_operation().is_ready():
-            self.choices.append(self.get_current_operation().get_value())
-            self.part_index.append(0)
-            self.index[-1] = 1
-            if isinstance(self.get_current_operation(), CallOperation):
-                raise CallException(self.get_current_operation())
-        elif self.get_current_operation().is_ready():
-            self.get_current_operation().finish_evaluation()
-            if self.get_index() < self.get_last_index():
-                self.part_index[-1] += 1
-                if isinstance(self.get_current_operation(), CallOperation):
-                    raise CallException(self.get_current_operation())
+        if self.get_index() == 0:
+            evaluation = self.get_current().evaluate()
+            if evaluation[0]:
+                self.choices.append(evaluation[1])
+                self.next_operation()
+        else:
+            evaluation = self.get_current().evaluate()
+            if evaluation[0]:
+                self.next_operation()
 
     def revert_evaluation(self):
-        if self.is_started():
-            raise BackwardException
-        if self.get_index() == 0 and self.get_current_operation() != self.operations[0]:
-            self.choices.pop()
-            self.index[-1] = 0
-            if isinstance(self.get_current_operation(), CallOperation):
-                raise CallException(self.get_current_operation())
+        if self.get_index() == 1 and self.choices[-1]:
+            self.finalize()
+            self.parent.prev_operation()
+        if self.get_index() == self.else_index and not self.choices[-1]:
+            self.finalize()
+            self.parent.prev_operation()
         else:
-            self.get_current_operation().revert_evaluation()
-            if self.get_current_operation().is_started() and self.get_index() > 0:
-                self.index[-1] -= 1
-                if isinstance(self.get_current_operation(), CallOperation):
-                    raise CallException(self.get_current_operation())
-
-    def get_value(self):
-        return None
-
-    def handle_back(self):
-        if not self.is_started():
-            self.part_index[-1] -= 1
-            self.revert_evaluation()
+            self.get_current().revert()
 
 
-class AttributeOperation(ComplexOperation):
+class AttributeOperation(ComputingOperation):
 
     def __init__(self, target, attr, operations):
         self.target = target
         self.attr = attr
-        ComplexOperation.__init__(self, operations)
+        ComputingOperation.__init__(self, operations)
 
-    def finish_evaluation(self):
-        address = Operation.source_creator.get_prev_call().mapping[self.target][-1]
-        value = Operation.memory_handler.reference_values[address][-1]
-        copy_value = copy.deepcopy(value)
-        Operation.memory_handler.reference_values[address].append(copy_value)
-        arguments = []
-        for i in range(len(self.operations)):
-            arguments.append(self.operations[i].get_value())
-        address = Operation.source_creator.get_prev_call().mapping[self.target][-1]
-        value = Operation.memory_handler.reference_values[address][-1]
-        getattr(value, self.attr)(*arguments)
+    def is_evaluated(self):
+        return len(self.temporary_values) == len(self.operations)
 
     def evaluate(self):
-        super(AttributeOperation, self).evaluate()
-        if self.is_ready():
-            self.parent_operation.handle_break()
+        while not self.is_evaluated():
+            evaluation = self.get_current().evaluate()
+            if evaluation[0]:
+                self.add_temp_result(evaluation[1])
+                self.next_operation()
+        else:
+            address = Operation.debugger.get_call().mapping[self.target][-1]
+            value = self.debugger.memory_handler.reference_values[address][-1]
+            result = getattr(value, self.attr)(*self.temporary_values)
+            self.temporary_values = []
+            return True, result
 
     def revert_evaluation(self):
-        if not self.is_started():
-            super(AttributeOperation, self).revert_evaluation()
+        Operation.debugger.get_call().revert_target(self.target)
+
+
+class SliceOperation(ComputingOperation):
+
+    def __init__(self, operations):
+        ComputingOperation.__init__(self, operations)
+
+    def is_evaluated(self):
+        return len(self.temporary_values) == 2
+
+    def evaluate(self):
+        while not self.is_evaluated():
+            evaluation = self.get_current().evaluate()
+            if evaluation[0]:
+                self.add_temp_result(evaluation[1])
+                self.next_operation()
         else:
-            Operation.source_creator.get_prev_call().revert_target(self.target)
-
-
-class SliceOperation(ComplexOperation):
-
-        def __init__(self, operations):
-            self.eval = []
-            self.operations = operations
-            ComplexOperation.__init__(self,operations)
+            result = slice(self.temporary_values[0], self.temporary_values[1], self.temporary_values[20])
+            self.temporary_values = []
+            return True, result
         
-        def finish_evaluation(self):
-            self.eval.append(slice(self.operations[0].get_value(),self.operations[1].get_value(),self.operations[2].get_value()))
-        
-        def revert_evaluation(self):
-            self.eval.pop()
-        
-        def get_value(self):
-            if not self.eval:
-                return self.eval[-1]
-            else:
-                return None
 
-
-class BuiltinOperation(ComplexOperation):
+class BuiltinOperation(ComputingOperation):
 
     def __init__(self, attr, operations):
         self.attr = attr
-        self.eval = []
-        ComplexOperation.__init__(self, operations)
+        ComputingOperation.__init__(self, operations)
 
-    def finish_evaluation(self):
-        arguments = []
-        for i in range(len(self.operations)):
-            arguments.append(self.operations[i].get_value())
-        self.eval.append(getattr(builtins, self.attr)(*arguments))
+    def is_evaluated(self):
+        return len(self.temporary_values) == len(self.operations)
 
     def evaluate(self):
-        super(BuiltinOperation, self).evaluate()
-        if self.is_ready():
-            self.parent_operation.handle_break()
-
-    def revert_evaluation(self):
-        self.eval.pop()
-
-    def get_value(self):
-        if not self.eval:
-            return self.eval[-1]
+        while not self.is_evaluated():
+            evaluation = self.get_current().evaluate()
+            if evaluation[0]:
+                self.add_temp_result(evaluation[1])
+                self.next_operation()
         else:
-            return None
+            result = getattr(builtins, self.attr)(*self.temporary_values)
+            self.temporary_values = []
+            return True, result
 
 
 class CallOperation(ComplexOperation):
