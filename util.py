@@ -4,6 +4,10 @@ class MemoryHandler:
         self.reference_values = {}
         self.address = 1
 
+    def is_immutable(self, value):
+        return isinstance(value, tuple) or isinstance(value, int) or isinstance(value, float) or \
+               isinstance(value, complex) or isinstance(value, str) or isinstance(value, bytes)
+
     def is_mutable(self, address):
         if isinstance(self.reference_values[address], list):
             return True
@@ -16,7 +20,13 @@ class MemoryHandler:
         else:
             return self.reference_values[address]
 
-    def put_value(self, value, mutable):
+    def put_value(self, value):
+        if not self.is_immutable(value):
+            self.put_value_typed(value, True)
+        else:
+            self.put_value_typed(value, False)
+
+    def put_value_typed(self, value, mutable):
         if mutable:
             self.reference_values[self.address] = [value]
         else:

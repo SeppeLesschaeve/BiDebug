@@ -26,8 +26,17 @@ class Debugger:
     def get_call(self):
         return self.call_stack[self.index]
 
+    def get_prev_call(self):
+        return self.call_stack[self.index - 1]
+
     def go_back(self):
         self.index -= 1
+
+    def get_function_args(self, name):
+        return self.program_builder.get_function_args(name)
+
+    def get_function_operations(self, name):
+        return self.program_builder.get_function_operations(name)
 
     def insert(self, name):
         self.index += 1
@@ -56,24 +65,21 @@ class Debugger:
         self.index -= 1
 
     def execute(self):
-        while True:
-            number = int(input())
-            if number == 1:
-                self.execute_forward()
-                self.next_operation()
-                break
-            elif number == 2:
-                self.execute_backward()
-                self.prev_operation()
-                break
-            elif number == 3:
-                raise StopException
+        number = int(input())
+        if number == 1:
+            evaluation = self.execute_forward()
+            self.get_call().get_current().next_operation(self.controller, evaluation)
+        elif number == 2:
+            self.execute_backward()
+            self.get_call().get_current().prev_operation(self.controller)
+        elif number == 3:
+            raise StopException
 
     def execute_forward(self):
         if self.get_call().name == 'boot' and self.get_call().is_evaluated():
             return
         try:
-            self.get_call().get_current().evaluate(None)
+            return self.get_call().get_current().evaluate(self)
         except CallException as e:
             self.insert(e.name)
         except BreakException:
