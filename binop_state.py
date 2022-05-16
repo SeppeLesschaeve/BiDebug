@@ -4,7 +4,7 @@ class LeftState:
         self.binop = binop
 
     def evaluate(self):
-        self.binop.left.evaluate()
+        self.binop.left.evaluate(None)
         if self.binop.left.is_forward_completed():
             self.binop.state = RightState(self.binop)
 
@@ -15,7 +15,7 @@ class RightState:
         self.binop = binop
 
     def evaluate(self):
-        self.binop.right.evaluate()
+        self.binop.right.evaluate(None)
         if self.binop.right.is_forward_completed():
             self.binop.state = EndBinOpState(self.binop)
 
@@ -26,7 +26,7 @@ class EndBinOpState:
         self.binop = binop
 
     def evaluate(self):
-        self.binop.operation.evaluate(self.binop.left.eval, self.binop.right.eval)
+        self.binop.operation.evaluate(None)
         self.binop.state = StartBinOpState(self.binop)
 
 

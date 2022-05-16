@@ -14,20 +14,20 @@ class Evaluator:
         el.eval = self.source_creator.get_active_source(el.ref)[-1]
 
     def evaluate_binop(self, el: BinaryOperation):
-        el.state.evaluate()
+        el.state.evaluate(None)
 
     def evaluate_call(self, el: CallOperation):
-        el.state.evaluate()
+        el.state.evaluate(None)
 
     def evaluate_subscript(self, el: SubscriptOperation):
-        el.slice.evaluate()
-        el.value.evaluate()
+        el.slice.evaluate(None)
+        el.value.evaluate(None)
         el.eval = el.set_elements()
 
     def evaluate_compare(self, el: CompareOperation):
-        el.left.evaluate()
+        el.left.evaluate(None)
         for comparator in el.comparators:
-            comparator.evaluate()
+            comparator.evaluate(None)
         el.eval = True
         for i in range(len(el.comparisons)):
             el.eval = el.eval and el.comparisons[i](el.comparators[i].eval, el.comparators[i + 1].eval)
@@ -35,12 +35,12 @@ class Evaluator:
     def evaluate_list(self, el: ListOperation):
         el.eval = []
         for elem in el.elts:
-            elem.evaluate()
+            elem.evaluate(None)
             el.eval.append(elem.eval)
 
     def evaluate_return(self, el: ReturnOperation):
         try:
-            el.value.evaluate()
+            el.value.evaluate(None)
             el.eval = el.value.eval
             self.source_creator.get_control_function().get_source()['return'] = el.eval
         except AttributeError:
@@ -58,7 +58,7 @@ class Evaluator:
     def evaluate_assign(self, el: AssignOperation):
         for target in el.targets:
             try:
-                target.evaluate(self)
+                target.evaluate(None)
                 target.eval.append(el.eval)
             except :
                 key = self.source_creator.add_value(el.eval)

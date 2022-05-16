@@ -10,7 +10,7 @@ class EvalState:
         self.call = call
 
     def evaluate(self):
-        self.call.function.evaluate()
+        self.call.function.evaluate(None)
         if self.call.function.is_forward_completed():
             self.call.state = EndCallState(self.call)
 

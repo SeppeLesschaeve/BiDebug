@@ -73,7 +73,7 @@ class Debugger:
         if self.get_call().name == 'boot' and self.get_call().is_evaluated():
             return
         try:
-            self.get_call().get_current().evaluate()
+            self.get_call().get_current().evaluate(None)
         except CallException as e:
             self.insert(e.name)
         except BreakException:
