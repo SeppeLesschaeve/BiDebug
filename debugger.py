@@ -38,6 +38,26 @@ class Debugger:
     def get_function_operations(self, name):
         return self.program_builder.get_function_operations(name)
 
+    def get_referenced_value(self, name):
+        return self.memory_handler.get_value(self.get_call().get_source()[name][-1])
+
+    def update_target(self, target, value):
+        self.memory_handler.update_target(target, value, self.get_call().get_source())
+
+    def update_targets(self, targets, value):
+        for target in targets:
+            self.update_target(target, value)
+
+    def revert_target(self, target):
+        self.memory_handler.revert_target(target, self.get_call().get_source())
+
+    def revert_targets(self, targets):
+        for target in targets:
+            self.revert_target(target)
+
+    def add_result(self, value):
+        self.memory_handler.put_value_typed(value, True)
+
     def insert(self, name):
         self.index += 1
         copy_of_operations = copy.deepcopy(self.program_builder.get_function_operations(name))

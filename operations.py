@@ -169,7 +169,7 @@ class NameOperation(SingleOperation):
         SingleOperation.__init__(self)
 
     def evaluate(self, debugger):
-        return True, debugger.get_call().get_referenced_value(self.name, debugger)
+        return True, debugger.get_referenced_value(self.name)
 
 
 class ReturnOperation(ComplexOperation):
@@ -242,12 +242,12 @@ class AugAssignOperation(ComputingOperation):
         ComputingOperation.__init__(self, operations)
 
     def finish(self, debugger):
-        debugger.get_call().update_target(self.target, self.temporary_values[0], debugger)
+        debugger.update_target(self.target, self.temporary_values[0])
         self.temporary_values = []
         return True, None
 
     def revert(self, debugger):
-        debugger.get_call().revert_target(self.target, debugger)
+        debugger.revert_target(self.target)
         self.finalize()
 
 
@@ -258,12 +258,12 @@ class AssignOperation(ComputingOperation):
         ComputingOperation.__init__(self, operations)
 
     def finish(self, debugger):
-        debugger.get_call().update_targets(self.targets, self.temporary_values[0], debugger)
+        debugger.update_targets(self.targets, self.temporary_values[0])
         self.temporary_values = []
         return True, None
 
     def revert(self, debugger):
-        debugger.get_call().revert_targets(self.targets, debugger)
+        debugger.revert_targets(self.targets)
         self.finalize()
 
 
@@ -365,7 +365,7 @@ class ForOperation(ComplexOperation):
                 self.iterable.append(evaluation[1])
             return evaluation
         elif self.get_index() == 1:
-            debugger.get_call().update_target(self.target, self.iterable[-1][self.iter[-1]], debugger)
+            debugger.update_target(self.target, self.iterable[-1][self.iter[-1]])
             self.iter[-1] += 1
         return self.get_current().evaluate(debugger)
 
@@ -375,7 +375,7 @@ class ForOperation(ComplexOperation):
         elif self.get_index() == 1 and self.iter[-1] > 0:
             self.get_current().revert(debugger)
             self.iter[-1] -= 1
-            debugger.get_call().revert_target(self.target, debugger)
+            debugger.revert_target(self.target)
         else:
             self.get_current().revert(debugger)
 
@@ -425,14 +425,13 @@ class AttributeOperation(ComputingOperation):
         ComputingOperation.__init__(self, operations)
 
     def finish(self, debugger):
-        address = debugger.get_call().mapping[self.target][-1]
-        value = debugger.memory_handler.reference_values[address][-1]
+        value = debugger.get_referenced_value(self.target)
         result = getattr(value, self.attr)(*self.temporary_values)
         self.temporary_values = []
         return True, result
 
     def revert(self, debugger):
-        debugger.get_call().revert_target(self.target, debugger)
+        debugger.revert_target(self.target)
 
 
 class SliceOperation(ComputingOperation):
@@ -463,64 +462,31 @@ class CallOperation(ComplexOperation):
     def __init__(self, name, operations):
         self.name = name
         self.args = []
-        self.mapping = {}
+        self.source = {}
         ComplexOperation.__init__(self, operations)
 
     def evaluate_mapping(self, debugger):
-        evaluation = self.args[len(self.mapping)].evaluate(debugger)
+        evaluation = self.args[len(self.source)].evaluate(debugger)
         if evaluation[0]:
-            if isinstance(self.args[len(self.mapping)], NameOperation):
-                address = debugger.get_prev_call().mapping[self.args[len(self.mapping)].name][-1]
+            if isinstance(self.args[len(self.source)], NameOperation):
+                address = debugger.get_prev_call().mapping[self.args[len(self.source)].name][-1]
                 if debugger.memory_handler.is_mutable(address):
                     value = copy.deepcopy(debugger.memory_handler.reference_values[address])
                 else:
                     value = [debugger.memory_handler.reference_values[address][-1]]
             else:
-                if isinstance(self.args[len(self.mapping)], ConstantOperation):
+                if isinstance(self.args[len(self.source)], ConstantOperation):
                     debugger.memory_handler.put_value_typed(evaluation[1], False)
                 else:
                     debugger.memory_handler.put_value_typed(evaluation[1], True)
                 value = [debugger.memory_handler.address - 1]
-            key = debugger.get_function_args(self.name)[len(self.mapping)]
-            self.mapping[key] = value
+            key = debugger.get_function_args(self.name)[len(self.source)]
+            self.source[key] = value
 
     def evaluate(self, debugger):
-        while len(self.mapping) < len(self.args):
+        while len(self.source) < len(self.args):
             self.evaluate_mapping(debugger)
         self.get_current().evaluate(debugger)
 
-    def get_referenced_value(self, name, debugger):
-        return debugger.memory_handler.get_value(self.mapping[name][-1])
-
-    def update_target(self, target, value, debugger):
-        if target not in self.mapping:
-            debugger.memory_handler.put_value(value)
-            self.mapping[target] = [debugger.memory_handler.address - 1]
-            return
-        address = self.mapping[target][-1]
-        if debugger.memory_handler.is_mutable(address):
-            debugger.memory_handler.reference_values[address].append(value)
-        else:
-            debugger.memory_handler.put_value_typed(value, False)
-            self.mapping[target].append(debugger.memory_handler.address - 1)
-
-    def update_targets(self, targets, value, debugger):
-        if len(targets) == 1:
-            self.update_target(targets[0], value, debugger)
-        else:
-            for i in range(len(targets)):
-                self.update_target(targets[i], value, debugger)
-
-    def revert_target(self, target, debugger):
-        address = self.mapping[target][-1]
-        if debugger.memory_handler.inv_value(address):
-            self.mapping[target].pop()
-            if not self.mapping[target]:
-                self.mapping.pop(target)
-
-    def revert_targets(self, targets, debugger):
-        for target in targets:
-            self.revert_target(target, debugger)
-
-    def add_result(self, value, debugger):
-        debugger.memory_handler.put_value_typed(value, True)
+    def get_source(self):
+        return self.source

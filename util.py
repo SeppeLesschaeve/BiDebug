@@ -44,3 +44,23 @@ class MemoryHandler:
         else:
             self.reference_values.pop(address)
             return True
+
+    def update_target(self, target, value, source):
+        if target not in source:
+            self.put_value(value)
+            source[target] = [self.address - 1]
+            return
+        address = source[target][-1]
+        if self.is_mutable(address):
+            self.reference_values[address].append(value)
+        else:
+            self.put_value_typed(value, False)
+            source[target].append(self.address - 1)
+
+    def revert_target(self, target, source):
+        address = source[target][-1]
+        if self.inv_value(address):
+            source[target].pop()
+            if not source[target]:
+                source.pop(target)
+
