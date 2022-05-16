@@ -88,10 +88,10 @@ class Debugger:
         number = int(input())
         if number == 1:
             evaluation = self.execute_forward()
-            self.get_call().get_current().next_operation(self.controller, evaluation)
+            self.get_call().get_current_to_evaluate().next_operation(self.controller, evaluation)
         elif number == 2:
             self.execute_backward()
-            self.get_call().get_current().prev_operation(self.controller)
+            self.get_call().get_current_to_evaluate().prev_operation(self.controller)
         elif number == 3:
             raise StopException
 
@@ -99,11 +99,11 @@ class Debugger:
         if self.get_call().name == 'boot' and self.get_call().is_evaluated():
             return
         try:
-            return self.get_call().get_current().evaluate(self)
+            return self.get_call().get_current_to_evaluate().evaluate(self)
         except CallException as e:
             self.insert(e.name)
         except BreakException:
-            self.get_call().get_current().parent_operation.handle_break()
+            self.get_call().get_current_to_evaluate().parent_operation.handle_break()
 
     def execute_backward(self):
         if not (self.source_creator.get_control_call().name == 'boot' and self.source_creator.get_control_call().is_ready()):
