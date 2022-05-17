@@ -345,15 +345,14 @@ class WhileOperation(ComplexOperation):
             return self.get_current_to_evaluate().evaluate(debugger)
 
     def revert(self, debugger):
-        if not (self.get_index() == 1 and self.number[-1] == 0):
-            self.get_current_to_revert().revert(debugger)
+        self.get_current_to_revert().revert(debugger)
         if self.get_index() == 1 and self.number[-1] == 0:
             self.finalize()
         elif self.get_index() == 1 and self.number[-1] > 0:
             self.number[-1] -= 1
 
     def next_operation(self, controller, evaluation):
-        controller.controller.next_operation_while(self, evaluation)
+        controller.next_operation_while(self, evaluation)
 
     def prev_operation(self, controller):
         controller.prev_operation_while(self)
@@ -509,3 +508,9 @@ class CallOperation(ComplexOperation):
 
     def get_source(self):
         return self.source
+
+    def next_operation(self, controller, evaluation):
+        controller.next_operation_call(self, evaluation)
+
+    def prev_operation(self, controller):
+        controller.prev_operation_call(self)

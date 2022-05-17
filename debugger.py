@@ -1,6 +1,6 @@
 import copy
 
-from operations import Operation, CallOperation, BreakException, CallException
+from operations import Operation, CallOperation, BreakException, CallException, ReturnException, BackwardException
 from controller import Controller
 from program_builder import ProgramBuilder
 from util import MemoryHandler
@@ -87,21 +87,28 @@ class Debugger:
     def execute(self):
         number = int(input())
         if number == 1:
-            evaluation = self.execute_forward()
-            self.get_call().get_current_to_evaluate().next_operation(self.controller, evaluation)
+            try:
+                evaluation = self.execute_forward()
+                self.get_call().get_current_to_evaluate().next_operation(self.controller, evaluation)
+            except CallException as c:
+                self.insert(c.name)
+            except BreakException:
+                self.controller.next_operation_break(self.get_call().get_current_to_evaluate)
+            except ReturnException as r:
+                self.update_target('return', r.return_value)
         elif number == 2:
-            self.get_call().get_current_to_evaluate().prev_operation(self.controller)
-            self.execute_backward()
+            while True:
+                try:
+                    self.get_call().get_current_to_revert().prev_operation(self.controller)
+                    self.execute_backward()
+                    break
+                except BackwardException:
+                    self.pop()
         elif number == 3:
             raise StopException
 
     def execute_forward(self):
-        try:
-            return self.get_call().get_current_to_evaluate().evaluate(self)
-        except CallException as e:
-            self.insert(e.name)
-        except BreakException:
-            self.get_call().get_current_to_evaluate().parent_operation.handle_break()
+        return self.get_call().get_current_to_evaluate().evaluate(self)
 
     def execute_backward(self):
         self.get_call().get_current_to_revert().revert()
