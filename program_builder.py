@@ -99,9 +99,11 @@ class ProgramBuilder(ast.NodeVisitor):
         else_operations = []
         for statement in node.orelse:
             else_operations.append(self.visit(statement))
-        ops.append(then_operations)
-        ops.append(else_operations)
-        if_then_else_operation = operations.IfThenElseOperation(ops)
+        for statement in then_operations:
+            ops.append(statement)
+        for statement in else_operations:
+            ops.append(statement)
+        if_then_else_operation = operations.IfThenElseOperation(ops, 1 + len(then_operations))
         for operation in then_operations:
             operation.parent_operation = if_then_else_operation
         for operation in else_operations:

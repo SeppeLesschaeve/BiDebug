@@ -34,8 +34,8 @@ class BreakException(Exception):
 
 class CallException(Exception):
 
-    def __init__(self, operation):
-        self.operation = operation
+    def __init__(self, name):
+        self.name = name
         super(CallException, self).__init__('Callrisian')
 
 
@@ -478,9 +478,9 @@ class BuiltinOperation(ComputingOperation):
 
 class CallOperation(ComplexOperation):
 
-    def __init__(self, name, operations):
+    def __init__(self, name, args, operations):
         self.name = name
-        self.args = []
+        self.args = args
         self.source = {}
         ComplexOperation.__init__(self, operations)
 

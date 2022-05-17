@@ -1,6 +1,6 @@
 import copy
 
-from operations import Operation, CallOperation, BreakException, CallException, ReturnException, StartException
+from operations import Operation, CallOperation, BreakException, CallException
 from controller import Controller
 from program_builder import ProgramBuilder
 from util import MemoryHandler
@@ -90,14 +90,12 @@ class Debugger:
             evaluation = self.execute_forward()
             self.get_call().get_current_to_evaluate().next_operation(self.controller, evaluation)
         elif number == 2:
-            self.execute_backward()
             self.get_call().get_current_to_evaluate().prev_operation(self.controller)
+            self.execute_backward()
         elif number == 3:
             raise StopException
 
     def execute_forward(self):
-        if self.get_call().name == 'boot' and self.get_call().is_evaluated():
-            return
         try:
             return self.get_call().get_current_to_evaluate().evaluate(self)
         except CallException as e:
@@ -106,17 +104,7 @@ class Debugger:
             self.get_call().get_current_to_evaluate().parent_operation.handle_break()
 
     def execute_backward(self):
-        if not (self.source_creator.get_control_call().name == 'boot' and self.source_creator.get_control_call().is_ready()):
-            try:
-                self.source_creator.get_control_call().go_back()
-            except StartException:
-                return
-        try:
-            self.source_creator.get_control_call().get_current_operation().revert_evaluation()
-        except ReturnException:
-            self.source_creator.go_back()
-        except BreakException:
-            self.source_creator.get_control_call().get_current_operation().parent_operation.handle_break()
+        self.get_call().get_current_to_revert().revert()
 
 
 def main(source_program):
