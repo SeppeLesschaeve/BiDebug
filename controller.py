@@ -1,13 +1,22 @@
 from operations import ComplexOperation, WhileOperation, ForOperation, IfThenElseOperation, CallOperation, \
-    ReturnException, BackwardException
+    ReturnException, BackwardException, ComputingOperation
 
 
 class Controller:
 
+    def __init__(self, debugger):
+        self.debugger = debugger
+
+    def set_next(self, operation):
+        operation.index[-1] += 1
+        operation.get_current_to_evaluate().initialize()
+        if operation.get_current_to_evaluate().is_controllable():
+            self.debugger.get_call().set_operation(operation.get_current_to_evaluate())
+
     def next_operation_complex(self, operation: ComplexOperation, evaluation):
         if evaluation[0]:
             if operation.get_index() < len(operation.operations) - 1:
-                operation.index[-1] += 1
+                self.set_next(operation)
             else:
                 operation.parent.next_operation(self, evaluation)
 
@@ -20,10 +29,19 @@ class Controller:
             else:
                 operation.parent.prev_operation(self)
 
+    def next_operation_computing(self, operation: ComputingOperation, evaluation):
+        if evaluation[0]:
+            if operation.get_index() < len(operation.operations) - 1:
+                self.set_next(operation)
+
+    def prev_operation_complex(self, operation: ComputingOperation):
+        if operation.get_index() > 0:
+            operation.index[-1] -= 1
+
     def next_operation_call(self, operation: CallOperation, evaluation):
         if evaluation[0]:
             if operation.get_index() < len(operation.operations) - 1:
-                operation.index[-1] += 1
+                self.set_next(operation)
             else:
                 raise ReturnException(None)
 
@@ -41,7 +59,7 @@ class Controller:
                 operation.parent.next_operation(evaluation)
         if evaluation[0]:
             if operation.get_index() < len(operation.operations) - 1:
-                operation.index[-1] += 1
+                self.set_next(operation)
             else:
                 operation.index[-1] = 0
 
@@ -55,18 +73,22 @@ class Controller:
     
     def next_operation_for(self, operation: ForOperation, evaluation):
         if operation.get_index() == 0 and evaluation[0]:
-            operation.index[-1] += 1
-        if operation.get_index() == 1 and evaluation[0]:
-            if operation.get_index() < len(operation.operations) - 1 \
-                    and operation.iter[-1] < len(operation.iterable[-1]):
-                operation.index[-1] += 1
+            self.set_next(operation)
+        elif operation.get_index() == 1 and evaluation[0]:
+            if operation.get_index() < len(operation.operations) - 1:
+                self.set_next(operation)
             else:
                 operation.parent.next_operation(evaluation)
-        if evaluation[0]:
+        elif evaluation[0]:
             if operation.get_index() < len(operation.operations) - 1:
-                operation.index[-1] += 1
+                self.set_next(operation)
             else:
-                operation.index[-1] = 1
+                if operation.iter[-1] < len(operation.iterable[-1]):
+                    operation.parent.next_operation(evaluation)
+                else:
+                    operation.index[-1] = 1
+                    if operation.get_current_to_evaluate().is_controllable():
+                        self.debugger.get_call().set_operation(operation.get_current_to_evaluate())
 
     def prev_operation_for(self, operation: ForOperation):
         if operation.get_index() == 1 and operation.iter[-1] != 0:
@@ -80,17 +102,21 @@ class Controller:
         if operation.get_index() == 0 and evaluation[0]:
             if evaluation[1]:
                 operation.index[-1] += operation.then_index
+                operation.get_current_to_evaluate().initialize()
             else:
                 operation.index[-1] += operation.else_index
+                operation.get_current_to_evaluate().initialize()
         if evaluation[0]:
             if operation.choices[-1]:
                 if operation.index[-1] < operation.else_index:
                     operation.index[-1] += 1
+                    operation.get_current_to_evaluate().initialize()
                 else:
                     operation.parent.next_operation(evaluation)
             else:
-                if operation.get_index() < len(operation.operations):
+                if operation.get_index() < len(operation.operations) - 1:
                     operation.index[-1] += 1
+                    operation.get_current_to_evaluate().initialize()
                 else:
                     operation.parent.next_operation(evaluation)
 

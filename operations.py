@@ -57,11 +57,17 @@ class Operation:
     def __init__(self):
         self.parent = None
 
+    def is_controllable(self):
+        return False
+
     def get_current_to_evaluate(self):
         return None
 
     def get_current_to_revert(self):
         return None
+
+    def initialize(self):
+        return
 
     def evaluate(self, debugger):
         return
@@ -90,13 +96,14 @@ class ComplexOperation(Operation):
         return self.index[-1]
 
     def get_current_to_evaluate(self):
-        return self.operations[self.get_index()].get_current_to_evaluate()
+        return self.operations[self.get_index()]
 
     def get_current_to_revert(self):
-        return self.operations[self.get_index()].get_current_to_revert()
+        return self.operations[self.get_index()]
 
     def initialize(self):
         self.index.append(0)
+        self.get_current_to_evaluate().initialize()
 
     def finalize(self):
         self.index.pop()
@@ -128,21 +135,22 @@ class ComputingOperation(ComplexOperation):
 
     def initialize(self):
         self.temporary_values = []
+        super(ComputingOperation, self).initialize()
 
     def evaluate(self, debugger):
         while not self.is_evaluated():
-            if isinstance(self.get_current_to_evaluate(), CallException):
+            if isinstance(self.get_current_to_evaluate(), CallOperation):
                 raise CallException(self.get_current_to_evaluate().name)
             evaluation = self.get_current_to_evaluate().evaluate(debugger)
             self.add_temp_result(evaluation[1])
-            self.next_operation(debugger.controller, evaluation)
+            self.next_operation_computing(debugger.controller, evaluation)
         else:
             return self.finish(debugger)
 
     def finish(self, debugger):
         return
 
-    def next_operation(self, controller, evaluation):
+    def next_operation_computing(self, controller, evaluation):
         controller.next_operation_computing(self, evaluation)
 
     def prev_operation(self, controller):
@@ -327,6 +335,9 @@ class WhileOperation(ComplexOperation):
         self.number = []
         ComplexOperation.__init__(self, operations)
 
+    def is_controllable(self):
+        return True
+
     def initialize(self):
         self.number.append(0)
         super(WhileOperation, self).initialize()
@@ -366,6 +377,9 @@ class ForOperation(ComplexOperation):
         self.iterable = []
         ComplexOperation.__init__(self, operations)
 
+    def is_controllable(self):
+        return True
+
     def initialize(self):
         self.iter.append(0)
         super(ForOperation, self).initialize()
@@ -382,8 +396,9 @@ class ForOperation(ComplexOperation):
                 self.iterable.append(evaluation[1])
             return evaluation
         elif self.get_index() == 1:
-            debugger.update_target(self.target, self.iterable[-1][self.iter[-1]])
-            self.iter[-1] += 1
+            if self.iterable[-1]:
+                debugger.update_target(self.target, self.iterable[-1][self.iter[-1]])
+                self.iter[-1] += 1
         return self.get_current_to_evaluate().evaluate(debugger)
 
     def revert(self, debugger):
@@ -409,6 +424,9 @@ class IfThenElseOperation(ComplexOperation):
         self.then_index = 1
         self.else_index = else_index
         ComplexOperation.__init__(self, operations)
+
+    def is_controllable(self):
+        return True
 
     def evaluate(self, debugger):
         if self.get_index() == 0:
@@ -471,6 +489,8 @@ class BuiltinOperation(ComputingOperation):
 
     def finish(self, debugger):
         result = getattr(builtins, self.attr)(*self.temporary_values)
+        if isinstance(result, range):
+            result = [*result]
         self.temporary_values = []
         return True, result
 
@@ -481,7 +501,11 @@ class CallOperation(ComplexOperation):
         self.name = name
         self.args = args
         self.source = {}
+        self.operation = None
         ComplexOperation.__init__(self, operations)
+
+    def is_controllable(self):
+        return True
 
     def evaluate_mapping(self, debugger):
         evaluation = self.args[len(self.source)].evaluate(debugger)
@@ -501,13 +525,21 @@ class CallOperation(ComplexOperation):
             key = debugger.get_function_args(self.name)[len(self.source)]
             self.source[key] = value
 
+    def initialize(self):
+        super(CallOperation, self).initialize()
+        self.operation = self
+
     def evaluate(self, debugger):
         while len(self.source) < len(self.args):
             self.evaluate_mapping(debugger)
-        self.get_current_to_evaluate().evaluate(debugger)
+        self.set_operation(self.get_current_to_evaluate())
+        self.operation.evaluate(debugger)
 
     def get_source(self):
         return self.source
+
+    def set_operation(self, operation):
+        self.operation = operation
 
     def next_operation(self, controller, evaluation):
         controller.next_operation_call(self, evaluation)

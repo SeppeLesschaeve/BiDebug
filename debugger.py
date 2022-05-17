@@ -16,7 +16,7 @@ class Debugger:
 
     def __init__(self, text):
         self.program_builder = ProgramBuilder(text)
-        self.controller = Controller()
+        self.controller = Controller(self)
         self.memory_handler = MemoryHandler()
         self.call_stack = []
         self.index = -1
@@ -108,7 +108,7 @@ class Debugger:
             raise StopException
 
     def execute_forward(self):
-        return self.get_call().get_current_to_evaluate().evaluate(self)
+        return self.get_call().evaluate(self)
 
     def execute_backward(self):
         self.get_call().get_current_to_revert().revert()
@@ -119,7 +119,7 @@ def main(source_program):
     while True:
         try:
             debugger.execute()
-            for key, value in debugger.get_call().mapping.items():
+            for key, value in debugger.get_call().get_source().items():
                 value = debugger.memory_handler.get_value(value[-1])
                 print(key, ' : ', value)
         except StopException:
