@@ -1,5 +1,5 @@
 from operations import ComplexOperation, WhileOperation, ForOperation, IfThenElseOperation, CallOperation, \
-    ReturnException, BackwardException, ComputingOperation
+    ComputingOperation, ReturnException, BackwardException
 
 
 class Controller:
@@ -9,6 +9,8 @@ class Controller:
 
     def set_next(self, operation):
         operation.index[-1] += 1
+        if isinstance(operation, CallOperation):
+            operation.set_operation(operation.get_current_to_evaluate())
         operation.get_current_to_evaluate().initialize()
         if operation.get_current_to_evaluate().is_controllable():
             self.debugger.get_call().set_operation(operation.get_current_to_evaluate())
@@ -18,7 +20,7 @@ class Controller:
             if operation.get_index() < len(operation.operations) - 1:
                 self.set_next(operation)
             else:
-                operation.parent.next_operation(self, evaluation)
+                operation.parent.next_operation(evaluation)
 
     def prev_operation_complex(self, operation: ComplexOperation):
         if operation.get_index() > 0:
@@ -43,7 +45,8 @@ class Controller:
             if operation.get_index() < len(operation.operations) - 1:
                 self.set_next(operation)
             else:
-                raise ReturnException(None)
+                if operation.name != 'boot':
+                    raise ReturnException((True, -1))
 
     def prev_operation_call(self, operation: CallOperation):
         if operation.get_index() > 0:
@@ -53,11 +56,11 @@ class Controller:
     
     def next_operation_while(self, operation: WhileOperation, evaluation):
         if operation.get_index() == 0 and evaluation[0]:
-            if evaluation[1]:
+            if self.debugger.get_value(evaluation[1]):
                 self.next_operation_complex(operation, evaluation)
             else:
                 operation.parent.next_operation(evaluation)
-        if evaluation[0]:
+        elif evaluation[0]:
             if operation.get_index() < len(operation.operations) - 1:
                 self.set_next(operation)
             else:
@@ -66,7 +69,7 @@ class Controller:
     def prev_operation_while(self, operation: WhileOperation):
         if operation.get_index() == 1 and operation.number[-1] != 0:
             operation.index[-1] = len(operation.operations) - 1
-        if operation.get_index() == 1 and operation.number[-1] == 0:
+        elif operation.get_index() == 1 and operation.number[-1] == 0:
             operation.parent.prev_operation(self)
         else:
             operation.index[-1] -= 1
@@ -84,11 +87,11 @@ class Controller:
                 self.set_next(operation)
             else:
                 if operation.iter[-1] < len(operation.iterable[-1]):
-                    operation.parent.next_operation(evaluation)
-                else:
                     operation.index[-1] = 1
                     if operation.get_current_to_evaluate().is_controllable():
                         self.debugger.get_call().set_operation(operation.get_current_to_evaluate())
+                else:
+                    operation.parent.next_operation(evaluation)
 
     def prev_operation_for(self, operation: ForOperation):
         if operation.get_index() == 1 and operation.iter[-1] != 0:
@@ -100,7 +103,7 @@ class Controller:
     
     def next_operation_if(self, operation: IfThenElseOperation, evaluation):
         if operation.get_index() == 0 and evaluation[0]:
-            if evaluation[1]:
+            if self.debugger.get_value(evaluation[1]):
                 operation.index[-1] += operation.then_index
                 operation.get_current_to_evaluate().initialize()
             else:

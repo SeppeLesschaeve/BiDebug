@@ -1,7 +1,7 @@
 class MemoryHandler:
 
     def __init__(self):
-        self.reference_values = {}
+        self.reference_values = {-1: None}
         self.address = 1
 
     def is_immutable(self, value):
@@ -20,17 +20,11 @@ class MemoryHandler:
         else:
             return self.reference_values[address]
 
-    def put_value(self, value):
-        if not self.is_immutable(value):
-            self.put_value_typed(value, True)
+    def put_value(self, operation):
+        if operation.is_mutable():
+            self.reference_values[self.address] = [operation.get_value()]
         else:
-            self.put_value_typed(value, False)
-
-    def put_value_typed(self, value, mutable):
-        if mutable:
-            self.reference_values[self.address] = [value]
-        else:
-            self.reference_values[self.address] = value
+            self.reference_values[self.address] = operation.get_value()
         self.address += 1
 
     def inv_value(self, address):
@@ -45,16 +39,24 @@ class MemoryHandler:
             self.reference_values.pop(address)
             return True
 
+    def add_result(self, target, value, source):
+        source[target] = [value]
+
     def update_target(self, target, value, source):
         if target not in source:
-            self.put_value(value)
-            source[target] = [self.address - 1]
+            if not self.is_immutable(value):
+                self.reference_values[self.address] = [value]
+            else:
+                self.reference_values[self.address] = value
+            source[target] = [self.address]
+            self.address += 1
             return
         address = source[target][-1]
         if self.is_mutable(address):
             self.reference_values[address].append(value)
         else:
-            self.put_value_typed(value, False)
+            self.reference_values[self.address] = value
+            self.address += 1
             source[target].append(self.address - 1)
 
     def revert_target(self, target, source):

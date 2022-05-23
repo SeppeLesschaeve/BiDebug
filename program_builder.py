@@ -24,7 +24,7 @@ class ProgramBuilder(ast.NodeVisitor):
                 self.visit(program)
         boot = [[], boot_part]
         for statement in boot_part:
-            statement.parent_operation = boot
+            statement.parent = boot
         self.functions['boot'] = boot
 
     def visit_FunctionDef(self, node: FunctionDef) -> Any:
@@ -56,14 +56,14 @@ class ProgramBuilder(ast.NodeVisitor):
         ops = [self.visit(node.value)]
         assign_operation = operations.AssignOperation(targets, ops)
         for operation in ops:
-            operation.parent_operation = assign_operation
+            operation.parent = assign_operation
         return assign_operation
 
     def visit_AugAssign(self, node: AugAssign) -> Any:
         ops = [self.visit(node.value)]
         augassign_operation = operations.AugAssignOperation(node.target.id, ops)
         for operation in ops:
-            operation.parent_operation = augassign_operation
+            operation.parent = augassign_operation
         return augassign_operation
 
     def visit_AnnAssign(self, node: AnnAssign) -> Any:
@@ -71,12 +71,13 @@ class ProgramBuilder(ast.NodeVisitor):
 
     def visit_For(self, node: For) -> Any:
         target = node.target.id
-        ops = [self.visit(node.iter)]
+        iter_operation = operations.IterOperation()
+        ops = [self.visit(node.iter), iter_operation]
         for statement in node.body:
             ops.append(self.visit(statement))
         for_operation = operations.ForOperation(target, ops)
         for operation in ops:
-            operation.parent_operation = for_operation
+            operation.parent = for_operation
         return for_operation
 
     def visit_AsyncFor(self, node: AsyncFor) -> Any:
@@ -88,7 +89,7 @@ class ProgramBuilder(ast.NodeVisitor):
             ops.append(self.visit(statement))
         while_operation = operations.WhileOperation(ops)
         for operation in ops:
-            operation.parent_operation = while_operation
+            operation.parent = while_operation
         return while_operation
 
     def visit_If(self, node: If) -> Any:
@@ -105,9 +106,9 @@ class ProgramBuilder(ast.NodeVisitor):
             ops.append(statement)
         if_then_else_operation = operations.IfThenElseOperation(ops, 1 + len(then_operations))
         for operation in then_operations:
-            operation.parent_operation = if_then_else_operation
+            operation.parent = if_then_else_operation
         for operation in else_operations:
-            operation.parent_operation = if_then_else_operation
+            operation.parent = if_then_else_operation
         return if_then_else_operation
 
     def visit_With(self, node: With) -> Any:
@@ -153,21 +154,21 @@ class ProgramBuilder(ast.NodeVisitor):
         ops = [self.visit(node.lower),self.visit(node.higher),self.viist(node.step)]
         slice_op = operations.SliceOperation(ops)
         for op in ops:
-            op.parent_operation = slice_op
+            op.parent = slice_op
         return slice_op
 
     def visit_BoolOp(self, node: BoolOp) -> Any:
         ops = [self.visit(node.values[0]), self.visit(node.values[1])]
         boolean_operation = operations.BooleanOperation(self.visit(node.op), ops)
         for operation in ops:
-            operation.parent_operation = boolean_operation
+            operation.parent = boolean_operation
         return boolean_operation
 
     def visit_BinOp(self, node: BinOp) -> Any:
         ops = [self.visit(node.left), self.visit(node.right)]
         binary_operation = operations.BinaryOperation(self.visit(node.op), ops)
         for operation in ops:
-            operation.parent_operation = binary_operation
+            operation.parent = binary_operation
         return binary_operation
 
     def visit_UnaryOp(self, node: UnaryOp) -> Any:
@@ -184,9 +185,9 @@ class ProgramBuilder(ast.NodeVisitor):
         ops.append(else_operations)
         if_then_else_operation = operations.IfThenElseOperation(ops)
         for operation in then_operations:
-            operation.parent_operation = if_then_else_operation
+            operation.parent = if_then_else_operation
         for operation in else_operations:
-            operation.parent_operation = if_then_else_operation
+            operation.parent = if_then_else_operation
         return if_then_else_operation
 
     def visit_Dict(self, node: Dict) -> Any:
@@ -198,7 +199,7 @@ class ProgramBuilder(ast.NodeVisitor):
             keys.append(key.value)
         dict_operation = operations.DictOperation(keys, values)
         for value in values:
-            value.parent_operation = dict_operation
+            value.parent = dict_operation
         return dict_operation
 
     def visit_Set(self, node: Set) -> Any:
@@ -207,7 +208,7 @@ class ProgramBuilder(ast.NodeVisitor):
             elements.append(self.visit(el))
         set_operation = operations.SetOperation(elements)
         for element in elements:
-            element.parent_operation = set_operation
+            element.parent = set_operation
         return set_operation
 
     def visit_ListComp(self, node: ListComp) -> Any:
@@ -240,7 +241,7 @@ class ProgramBuilder(ast.NodeVisitor):
             ops.append(self.visit(operation))
         compare_operation = operations.CompareOperation(comparisons, ops)
         for operation in ops:
-            operation.parent_operation = compare_operation
+            operation.parent = compare_operation
         return compare_operation
 
     def visit_Call(self, node: Call) -> Any:
@@ -264,7 +265,7 @@ class ProgramBuilder(ast.NodeVisitor):
                 copy_of_operations = copy.deepcopy(self.get_function_operations(node.func.id))
                 call_operation = operations.CallOperation(node.func.id, call_args, copy_of_operations)
         for operation in ops:
-            operation.parent_operation = call_operation
+            operation.parent = call_operation
         return call_operation
 
     def visit_FormattedValue(self, node: FormattedValue) -> Any:
@@ -286,7 +287,7 @@ class ProgramBuilder(ast.NodeVisitor):
         ops = [self.visit(node.value), self.visit(node.slice)]
         subscript_operation = operations.SubscriptOperation(ops)
         for operation in ops:
-            operation.parent_operation = subscript_operation
+            operation.parent = subscript_operation
         return subscript_operation
 
     def visit_Starred(self, node: Starred) -> Any:
@@ -301,7 +302,7 @@ class ProgramBuilder(ast.NodeVisitor):
             elements.append(self.visit(el))
         list_operation = operations.ListOperation(elements)
         for element in elements:
-            element.parent_operation = list_operation
+            element.parent = list_operation
         return list_operation
 
     def visit_Tuple(self, node: Tuple) -> Any:
@@ -362,16 +363,16 @@ class ProgramBuilder(ast.NodeVisitor):
         return operations.sub
 
     def visit_Invert(self, node: Invert) -> Any:
-        return node
+        return operations.inv
 
     def visit_Not(self, node: Not) -> Any:
         return operations.nit
 
     def visit_UAdd(self, node: UAdd) -> Any:
-        return node
+        return operations.adu
 
     def visit_USub(self, node: USub) -> Any:
-        return node
+        return operations.sbu
 
     def visit_Eq(self, node: Eq) -> Any:
         return operations.equ
@@ -428,7 +429,8 @@ class ProgramBuilder(ast.NodeVisitor):
         return node
 
     def visit_Index(self, node: Index) -> Any:
-        return node
+        value = self.visit(node.value.op)(node.value.operand.value)
+        return operations.ConstantOperation(value)
 
     def visit_Suite(self, node: Suite) -> Any:
         return node
