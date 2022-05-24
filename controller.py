@@ -1,5 +1,5 @@
 from operations import ComplexOperation, WhileOperation, ForOperation, IfThenElseOperation, CallOperation, \
-    ComputingOperation, ReturnException, BackwardException, Operation
+    ComputingOperation, ReturnException, BackwardException, Operation, CallException
 
 
 class Controller:
@@ -25,6 +25,8 @@ class Controller:
     def prev_operation_complex(self, operation: ComplexOperation):
         if operation.get_index() > 0:
             operation.index[-1] -= 1
+            if isinstance(operation.operations[operation.index[-1]], CallOperation):
+                raise CallException(operation.operations[operation.index[-1]])
         else:
             operation.parent.prev_operation()
 
@@ -34,8 +36,10 @@ class Controller:
                 self.set_next(operation)
 
     def prev_operation_computing(self, operation: ComputingOperation):
-        if operation.get_index() > 0:
+        while operation.get_index() > 0:
             operation.index[-1] -= 1
+            if isinstance(operation.operations[operation.index[-1]], CallOperation):
+                raise CallException(operation.operations[operation.index[-1]])
 
     def next_operation_call(self, operation: CallOperation, evaluation):
         if evaluation[0]:
@@ -48,6 +52,8 @@ class Controller:
     def prev_operation_call(self, operation: CallOperation):
         if operation.get_index() > 0:
             operation.index[-1] -= 1
+            if isinstance(operation.operations[operation.index[-1]], CallOperation):
+                raise CallException(operation.operations[operation.index[-1]])
         else:
             raise BackwardException
     
@@ -67,11 +73,15 @@ class Controller:
         if operation.get_index() == 1 and operation.number[-1] != 0:
             operation.index[-1] = len(operation.operations) - 1
             operation.number[-1] -= 1
+            if isinstance(operation.operations[operation.index[-1]], CallOperation):
+                raise CallException(operation.operations[operation.index[-1]])
         elif operation.get_index() == 1 and operation.number[-1] == 0:
             operation.finalize()
             operation.parent.prev_operation()
         else:
             operation.index[-1] -= 1
+            if isinstance(operation.operations[operation.index[-1]], CallOperation):
+                raise CallException(operation.operations[operation.index[-1]])
     
     def next_operation_for(self, operation: ForOperation, evaluation):
         if operation.get_index() == 0 and evaluation[0]:
@@ -97,11 +107,15 @@ class Controller:
             operation.index[-1] = len(operation.operations) - 1
             operation.iter[-1] -= 1
             Operation.debugger.revert_target(operation.target)
+            if isinstance(operation.operations[operation.index[-1]], CallOperation):
+                raise CallException(operation.operations[operation.index[-1]])
         if operation.get_index() == 1 and operation.iter[-1] == 0:
             operation.finalize()
             operation.parent.prev_operation()
         else:
             operation.index[-1] -= 1
+            if isinstance(operation.operations[operation.index[-1]], CallOperation):
+                raise CallException(operation.operations[operation.index[-1]])
     
     def next_operation_if(self, operation: IfThenElseOperation, evaluation):
         if operation.get_index() == 0 and evaluation[0]:
@@ -134,6 +148,8 @@ class Controller:
             operation.parent.prev_operation()
         else:
             operation.index[-1] -= 1
+            if isinstance(operation.operations[operation.index[-1]], CallOperation):
+                raise CallException(operation.operations[operation.index[-1]])
 
     def next_operation_break(self, operation):
         if isinstance(operation.parent, ForOperation) or isinstance(operation.parent, WhileOperation):

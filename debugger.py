@@ -86,6 +86,10 @@ class Debugger:
         self.call_stack.pop(self.index)
         self.index -= 1
 
+    def call_back(self):
+        self.index += 1
+        self.execute(2)
+
     def execute(self, number):
         if number == 1:
             try:
@@ -107,6 +111,8 @@ class Debugger:
                     break
                 except BackwardException:
                     self.pop()
+                except CallException:
+                    self.call_back()
         elif number == 3:
             raise StopException
 
