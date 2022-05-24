@@ -1,5 +1,5 @@
 from operations import ComplexOperation, WhileOperation, ForOperation, IfThenElseOperation, CallOperation, \
-    ComputingOperation, ReturnException, BackwardException
+    ComputingOperation, ReturnException, BackwardException, Operation
 
 
 class Controller:
@@ -26,17 +26,14 @@ class Controller:
         if operation.get_index() > 0:
             operation.index[-1] -= 1
         else:
-            if not operation.parent:
-                raise BackwardException
-            else:
-                operation.parent.prev_operation(self)
+            operation.parent.prev_operation()
 
     def next_operation_computing(self, operation: ComputingOperation, evaluation):
         if evaluation[0]:
             if operation.get_index() < len(operation.operations) - 1:
                 self.set_next(operation)
 
-    def prev_operation_complex(self, operation: ComputingOperation):
+    def prev_operation_computing(self, operation: ComputingOperation):
         if operation.get_index() > 0:
             operation.index[-1] -= 1
 
@@ -69,8 +66,10 @@ class Controller:
     def prev_operation_while(self, operation: WhileOperation):
         if operation.get_index() == 1 and operation.number[-1] != 0:
             operation.index[-1] = len(operation.operations) - 1
+            operation.number[-1] -= 1
         elif operation.get_index() == 1 and operation.number[-1] == 0:
-            operation.parent.prev_operation(self)
+            operation.finalize()
+            operation.parent.prev_operation()
         else:
             operation.index[-1] -= 1
     
@@ -96,8 +95,11 @@ class Controller:
     def prev_operation_for(self, operation: ForOperation):
         if operation.get_index() == 1 and operation.iter[-1] != 0:
             operation.index[-1] = len(operation.operations) - 1
+            operation.iter[-1] -= 1
+            Operation.debugger.revert_target(operation.target)
         if operation.get_index() == 1 and operation.iter[-1] == 0:
-            operation.parent.prev_operation(self)
+            operation.finalize()
+            operation.parent.prev_operation()
         else:
             operation.index[-1] -= 1
     
@@ -125,9 +127,11 @@ class Controller:
 
     def prev_operation_if(self, operation: IfThenElseOperation):
         if operation.get_index() == operation.then_index and operation.choices[-1]:
-            operation.parent.prev_operation(self)
+            operation.finalize()
+            operation.parent.prev_operation()
         if operation.get_index() == operation.else_index and not operation.choices[-1]:
-            operation.parent.prev_operation(self)
+            operation.finalize()
+            operation.parent.prev_operation()
         else:
             operation.index[-1] -= 1
 

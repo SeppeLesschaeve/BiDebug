@@ -102,7 +102,7 @@ class Debugger:
         elif number == 2:
             while True:
                 try:
-                    self.get_call().get_current_to_revert().prev_operation(self.controller)
+                    self.get_call().get_current_to_revert().prev_operation()
                     self.execute_backward()
                     break
                 except BackwardException:

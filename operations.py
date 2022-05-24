@@ -132,8 +132,8 @@ class ComplexOperation(Operation):
     def next_operation(self, evaluation):
         Operation.debugger.controller.next_operation_complex(self, evaluation)
 
-    def prev_operation(self, controller):
-        controller.prev_operation_complex(self)
+    def prev_operation(self):
+        Operation.debugger.controller.prev_operation_complex(self)
 
 
 class ComputingOperation(ComplexOperation):
@@ -180,8 +180,8 @@ class ComputingOperation(ComplexOperation):
     def next_operation_computing(self, evaluation):
         Operation.debugger.controller.next_operation_computing(self, evaluation)
 
-    def prev_operation(self, controller):
-        controller.prev_operation_computing(self)
+    def prev_operation(self):
+        Operation.debugger.controller.prev_operation_computing(self)
 
 
 class BreakOperation(SingleOperation):
@@ -460,16 +460,12 @@ class WhileOperation(ComplexOperation):
 
     def revert(self):
         self.get_current_to_revert().revert()
-        if self.get_index() == 1 and self.number[-1] == 0:
-            self.finalize()
-        elif self.get_index() == 1 and self.number[-1] > 0:
-            self.number[-1] -= 1
 
     def next_operation(self, evaluation):
         Operation.debugger.controller.next_operation_while(self, evaluation)
 
-    def prev_operation(self, controller):
-        controller.prev_operation_while(self)
+    def prev_operation(self):
+        Operation.debugger.controller.prev_operation_while(self)
 
 
 class IterOperation(SingleOperation):
@@ -514,19 +510,13 @@ class ForOperation(ComplexOperation):
         return self.get_current_to_evaluate().evaluate()
 
     def revert(self):
-        if not (self.get_index() == 1 and self.iter[-1] == 0):
-            self.get_current_to_revert().revert()
-        if self.get_index() == 1 and self.iter[-1] == 0:
-            self.finalize()
-        elif self.get_index() == 1 and self.iter[-1] > 0:
-            self.iter[-1] -= 1
-            Operation.debugger.revert_target(self.target)
+        self.get_current_to_revert().revert()
 
     def next_operation(self, evaluation):
         Operation.debugger.controller.next_operation_for(self, evaluation)
 
-    def prev_operation(self, controller):
-        controller.prev_operation_for(self)
+    def prev_operation(self):
+        Operation.debugger.controller.prev_operation_for(self)
 
 
 class IfThenElseOperation(ComplexOperation):
@@ -550,16 +540,12 @@ class IfThenElseOperation(ComplexOperation):
 
     def revert(self):
         self.get_current_to_revert().revert()
-        if self.get_index() == self.then_index and self.choices[-1]:
-            self.finalize()
-        if self.get_index() == self.else_index and not self.choices[-1]:
-            self.finalize()
 
     def next_operation(self, evaluation):
         Operation.debugger.controller.next_operation_if(self, evaluation)
 
-    def prev_operation(self, controller):
-        controller.prev_operation_if(self)
+    def prev_operation(self):
+        Operation.debugger.controller.prev_operation_if(self)
 
 
 class AttributeOperation(ComputingOperation):
@@ -684,5 +670,5 @@ class CallOperation(ComplexOperation):
     def next_operation(self, evaluation):
         Operation.debugger.controller.next_operation_call(self, evaluation)
 
-    def prev_operation(self, controller):
-        controller.prev_operation_call(self)
+    def prev_operation(self):
+        Operation.debugger.controller.prev_operation_call(self)
