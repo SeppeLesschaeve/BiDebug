@@ -40,6 +40,8 @@ class Controller:
             operation.index[-1] -= 1
             if isinstance(operation.operations[operation.index[-1]], CallOperation):
                 raise CallException(operation.operations[operation.index[-1]])
+        else:
+            operation.parent.prev_operation()
 
     def next_operation_call(self, operation: CallOperation, evaluation):
         if evaluation[0]:
