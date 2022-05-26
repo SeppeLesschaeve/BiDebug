@@ -1,15 +1,15 @@
 import copy
 
 from operations import Operation, CallOperation, BreakException, CallException, ReturnException, BackwardException
-from controller import Controller
+from controller import Controller, StopException, StartException
 from program_builder import ProgramBuilder
 from util import MemoryHandler
 
 
-class StopException(Exception):
+class EndException(Exception):
 
     def __init__(self):
-        super(StopException, self).__init__('Stopa Fett')
+        super(EndException, self).__init__('Endor')
 
 
 class Debugger:
@@ -95,6 +95,8 @@ class Debugger:
             try:
                 evaluation = self.execute_forward()
                 self.get_call().get_operation().next_operation(evaluation)
+            except StopException:
+                return
             except CallException as c:
                 self.insert(c.operation)
             except BreakException:
@@ -109,12 +111,14 @@ class Debugger:
                     self.get_call().get_current_to_revert().prev_operation()
                     self.execute_backward()
                     break
+                except StartException:
+                    return
                 except BackwardException:
                     self.pop()
                 except CallException:
                     self.call_back()
         elif number == 3:
-            raise StopException
+            raise EndException
 
     def execute_forward(self):
         return self.get_call().get_operation().evaluate()
@@ -148,7 +152,7 @@ def main(source_program):
             for key, value in debugger.get_call().get_source().items():
                 value = debugger.memory_handler.get_value(value[-1])
                 print(key, ' : ', value)
-        except StopException:
+        except EndException:
             break
 
 

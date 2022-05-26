@@ -44,15 +44,9 @@ class CallException(Exception):
 
 class ReturnException(Exception):
 
-    def __init__(self, return_value):
-        self.return_value = return_value
+    def __init__(self, return_address):
+        self.return_address = return_address
         super(ReturnException, self).__init__('Reyturn')
-
-
-class StartException(Exception):
-    
-    def __init__(self):
-        super(StartException, self).__init__('Start Wars')
 
 
 class Operation:
@@ -61,7 +55,6 @@ class Operation:
 
     def __init__(self):
         self.parent = None
-        self.reference = -1
 
     def get_value(self):
         return None
@@ -161,12 +154,12 @@ class ComputingOperation(ComplexOperation):
             if isinstance(self.get_current_to_evaluate(), CallOperation):
                 if 'return' in self.get_current_to_evaluate().get_source():
                     self.add_temp_result(self.get_current_to_evaluate().get_source()['result'])
-                    self.next_operation_computing((True, self.temporary_values[-1]))
+                    self.next_operation_computing(self.temporary_values[-1])
                 else:
                     raise CallException(self.get_current_to_evaluate())
             else:
                 evaluation = self.get_current_to_evaluate().evaluate()
-                self.add_temp_result(evaluation[1])
+                self.add_temp_result(evaluation)
                 self.next_operation_computing(evaluation)
         else:
             return self.finish()
@@ -175,7 +168,7 @@ class ComputingOperation(ComplexOperation):
         return
 
     def handle_return(self, evaluation):
-        self.add_temp_result(evaluation[1])
+        self.add_temp_result(evaluation)
 
     def next_operation_computing(self, evaluation):
         Operation.debugger.controller.next_operation_computing(self, evaluation)
@@ -204,8 +197,7 @@ class ConstantOperation(SingleOperation):
 
     def evaluate(self):
         Operation.debugger.insert_value(self)
-        self.reference = Operation.debugger.get_last_allocated()
-        return True, self.reference
+        return Operation.debugger.get_last_allocated()
 
     def get_value(self):
         return self.value
@@ -218,8 +210,7 @@ class NameOperation(SingleOperation):
         SingleOperation.__init__(self)
 
     def evaluate(self):
-        self.reference = Operation.debugger.get_reference(self.name)
-        return True, self.reference
+        return Operation.debugger.get_reference(self.name)
 
     def get_value(self):
         Operation.debugger.get_referenced_value(self.name)
@@ -235,7 +226,7 @@ class ReturnOperation(ComplexOperation):
 
     def evaluate(self):
         if not self.get_current_to_evaluate():
-            raise ReturnException((True, -1))
+            raise ReturnException( -1)
         else:
             result = self.get_current_to_evaluate().evaluate()
             if result[0]:
@@ -259,8 +250,7 @@ class BinaryOperation(ComputingOperation):
         Operation.debugger.insert_value(self)
         self.temporary_values = []
         self.index[-1] = 0
-        self.reference = Operation.debugger.get_last_allocated()
-        return True, self.reference
+        return Operation.debugger.get_last_allocated()
 
     def is_mutable(self):
         return Operation.debugger.is_mutable(self.temporary_values[0])
@@ -280,8 +270,7 @@ class BooleanOperation(ComputingOperation):
         Operation.debugger.insert_value(self)
         self.temporary_values = []
         self.index[-1] = 0
-        self.reference = Operation.debugger.get_last_allocated()
-        return True, self.reference
+        return Operation.debugger.get_last_allocated()
 
 
 class CompareOperation(ComputingOperation):
@@ -300,8 +289,7 @@ class CompareOperation(ComputingOperation):
         Operation.debugger.insert_value(self)
         self.temporary_values = []
         self.index[-1] = 0
-        self.reference = Operation.debugger.get_last_allocated()
-        return True, self.reference
+        return Operation.debugger.get_last_allocated()
 
 
 class SubscriptOperation(ComputingOperation):
@@ -317,7 +305,7 @@ class SubscriptOperation(ComputingOperation):
         Operation.debugger.insert_value(self)
         self.temporary_values = []
         self.index[-1] = 0
-        return True, Operation.debugger.get_last_allocated()
+        return Operation.debugger.get_last_allocated()
 
     def is_mutable(self):
         return not Operation.debugger.memory_handler.is_immutable(self.result)
@@ -336,7 +324,7 @@ class AugAssignOperation(ComputingOperation):
         Operation.debugger.update_target(self.target, value[0])
         self.temporary_values = []
         self.index[-1] = 0
-        return True, self.reference
+        return -1
 
     def revert(self):
         Operation.debugger.revert_target(self.target)
@@ -359,7 +347,7 @@ class AssignOperation(ComputingOperation):
         Operation.debugger.update_targets(self.targets, value[0])
         self.temporary_values = []
         self.index[-1] = 0
-        return True, self.reference
+        return -1
 
     def revert(self):
         Operation.debugger.revert_targets(self.targets)
@@ -382,8 +370,7 @@ class ListOperation(ComputingOperation):
         Operation.debugger.insert_value(self)
         self.temporary_values = []
         self.index[-1] = 0
-        self.reference = Operation.debugger.get_last_allocated()
-        return True, self.reference
+        return Operation.debugger.get_last_allocated()
 
     def is_mutable(self):
         return True
@@ -402,8 +389,7 @@ class SetOperation(ComputingOperation):
         Operation.debugger.insert_value(self)
         self.temporary_values = []
         self.index[-1] = 0
-        self.reference = Operation.debugger.get_last_allocated()
-        return True, self.reference
+        return Operation.debugger.get_last_allocated()
 
     def is_mutable(self):
         return True
@@ -425,8 +411,7 @@ class DictOperation(ComputingOperation):
         Operation.debugger.insert_value(self)
         self.temporary_values = []
         self.index[-1] = 0
-        self.reference = Operation.debugger.get_last_allocated()
-        return True, self.reference
+        return Operation.debugger.get_last_allocated()
 
     def is_mutable(self):
         return True
@@ -452,7 +437,7 @@ class WhileOperation(ComplexOperation):
     def evaluate(self):
         if self.get_index() == 0:
             evaluation = self.get_current_to_evaluate().evaluate()
-            if Operation.debugger.get_value(evaluation[1]):
+            if Operation.debugger.get_value(evaluation):
                 self.number[-1] += 1
             return evaluation
         else:
@@ -478,7 +463,7 @@ class IterOperation(SingleOperation):
         if parent.iterable[-1]:
             Operation.debugger.update_target(parent.target, parent.iterable[-1][parent.iter[-1]])
             parent.iter[-1] += 1
-        return True, -1
+        return -1
 
 
 class ForOperation(ComplexOperation):
@@ -504,8 +489,7 @@ class ForOperation(ComplexOperation):
     def evaluate(self):
         if self.get_index() == 0:
             evaluation = self.get_current_to_evaluate().evaluate()
-            if evaluation[0]:
-                self.iterable.append(Operation.debugger.get_value(evaluation[1]))
+            self.iterable.append(Operation.debugger.get_value(evaluation))
             return evaluation
         return self.get_current_to_evaluate().evaluate()
 
@@ -533,8 +517,7 @@ class IfThenElseOperation(ComplexOperation):
     def evaluate(self):
         if self.get_index() == 0:
             evaluation = self.get_current_to_evaluate().evaluate()
-            if evaluation[0]:
-                self.choices.append(evaluation[1])
+            self.choices.append(evaluation)
             return evaluation
         return self.get_current_to_evaluate().evaluate()
 
@@ -563,8 +546,7 @@ class AttributeOperation(ComputingOperation):
         Operation.debugger.insert_value(self)
         self.temporary_values = []
         self.index[-1] = 0
-        self.reference = Operation.debugger.get_last_allocated()
-        return True, self.reference
+        return Operation.debugger.get_last_allocated()
 
     def is_mutable(self):
         return not Operation.debugger.memory_handler.is_immutable(self.result)
@@ -589,8 +571,7 @@ class SliceOperation(ComputingOperation):
         Operation.debugger.insert_value(self)
         self.temporary_values = []
         self.index[-1] = 0
-        self.reference = Operation.debugger.get_last_allocated()
-        return True, self.reference
+        return Operation.debugger.get_last_allocated()
 
     def is_mutable(self):
         return True
@@ -612,7 +593,7 @@ class BuiltinOperation(ComputingOperation):
         Operation.debugger.insert_value(self)
         self.temporary_values = []
         self.index[-1] = 0
-        return True, Operation.debugger.get_last_allocated()
+        return Operation.debugger.get_last_allocated()
 
     def is_mutable(self):
         return not Operation.debugger.memory_handler.is_immutable(self.result)
@@ -646,7 +627,6 @@ class CallOperation(ComplexOperation):
 
     def set_return(self, address):
         self.source['return'] = address
-        self.reference = address
 
     def initialize(self):
         super(CallOperation, self).initialize()
