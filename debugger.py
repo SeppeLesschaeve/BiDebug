@@ -142,6 +142,9 @@ class Debugger:
     def get_value(self, address):
         return self.memory_handler.get_value(address)
 
+infile = open("infile.txt")
+def input():
+    return infile.readline()
 
 def main(source_program):
     debugger = Debugger(source_program)
