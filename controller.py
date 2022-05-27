@@ -24,10 +24,10 @@ class Controller:
         if operation.get_index() == len(operation.operations):
             return
         if isinstance(operation, CallOperation):
-            operation.set_operation(operation.get_current_to_evaluate())
-        operation.get_current_to_evaluate().initialize()
-        if operation.get_current_to_evaluate().is_controllable():
-            self.debugger.get_call().set_operation(operation.get_current_to_evaluate())
+            operation.set_operation(operation.get_current_operation())
+        operation.get_current_operation().initialize()
+        if operation.get_current_operation().is_controllable():
+            self.debugger.get_call().set_operation(operation.get_current_operation())
 
     def next_operation_complex(self, operation: ComplexOperation, evaluation):
         if operation.get_index() < len(operation.operations):
@@ -124,8 +124,8 @@ class Controller:
             if operation.get_index() == len(operation.operations):
                 if operation.iter[-1] < len(operation.iterable[-1]):
                     operation.index[-1] = 1
-                    if operation.get_current_to_evaluate().is_controllable():
-                        self.debugger.get_call().set_operation(operation.get_current_to_evaluate())
+                    if operation.get_current_operation().is_controllable():
+                        self.debugger.get_call().set_operation(operation.get_current_operation())
                 else:
                     operation.parent.next_operation(evaluation)
 
@@ -154,22 +154,22 @@ class Controller:
         if operation.get_index() == 0:
             if self.debugger.get_value(evaluation):
                 operation.index[-1] += operation.then_index
-                operation.get_current_to_evaluate().initialize()
+                operation.get_current_operation().initialize()
             else:
                 operation.index[-1] += operation.else_index
-                operation.get_current_to_evaluate().initialize()
+                operation.get_current_operation().initialize()
         else:
             if operation.choices[-1]:
                 if operation.index[-1] < operation.else_index:
                     operation.index[-1] += 1
-                    operation.get_current_to_evaluate().initialize()
+                    operation.get_current_operation().initialize()
                 else:
                     operation.parent.next_operation(evaluation)
             else:
                 if operation.get_index() < len(operation.operations):
                     operation.index[-1] += 1
                     if operation.get_index() < len(operation.operations):
-                        operation.get_current_to_evaluate().initialize()
+                        operation.get_current_operation().initialize()
                     else:
                         operation.parent.next_operation(evaluation)
 

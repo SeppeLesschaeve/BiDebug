@@ -36,7 +36,7 @@ class Debugger:
 
     def go_back(self, evaluation):
         self.index -= 1
-        self.get_call().operation.get_current_to_evaluate().handle_return(evaluation)
+        self.get_call().operation.get_current_operation().handle_return(evaluation)
 
     def get_function_args(self, name):
         return self.program_builder.get_function_args(name)
@@ -100,7 +100,7 @@ class Debugger:
             except CallException as c:
                 self.insert(c.operation)
             except BreakException:
-                self.controller.next_operation_break(self.get_call().get_current_to_evaluate)
+                self.controller.next_operation_break(self.get_call().get_current_operation)
             except ReturnException as r:
                 self.add_result('return', r.return_address)
                 self.go_back(r.return_address)
@@ -141,10 +141,6 @@ class Debugger:
 
     def get_value(self, address):
         return self.memory_handler.get_value(address)
-
-infile = open("infile.txt")
-def input():
-    return infile.readline()
 
 def main(source_program):
     debugger = Debugger(source_program)

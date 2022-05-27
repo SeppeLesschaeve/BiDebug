@@ -65,10 +65,7 @@ class Operation:
     def is_controllable(self):
         return False
 
-    def get_current_to_evaluate(self):
-        return None
-
-    def get_current_to_revert(self):
+    def get_current_operation(self):
         return None
 
     def initialize(self):
@@ -89,7 +86,7 @@ class SingleOperation(Operation):
     def __init__(self):
         Operation.__init__(self)
 
-    def get_current_to_evaluate(self):
+    def get_current_operation(self):
         return self
 
 
@@ -103,24 +100,23 @@ class ComplexOperation(Operation):
     def get_index(self):
         return self.index[-1]
 
-    def get_current_to_evaluate(self):
-        return self.operations[self.get_index()]
-
-    def get_current_to_revert(self):
+    def get_current_operation(self):
         return self.operations[self.get_index()]
 
     def initialize(self):
         self.index.append(0)
-        self.get_current_to_evaluate().initialize()
+        self.get_current_operation().initialize()
 
     def finalize(self):
         self.index.pop()
 
     def evaluate(self):
-        return self.get_current_to_evaluate().evaluate()
+        return self.get_current_operation().evaluate()
 
     def revert(self):
-        self.get_current_to_evaluate().revert()
+        self.get_current_operation().revert()
+        if self.get_index() == 0:
+            self.finalize()
 
     def next_operation(self, evaluation):
         Operation.debugger.controller.next_operation_complex(self, evaluation)
@@ -154,14 +150,14 @@ class ComputingOperation(ComplexOperation):
 
     def evaluate(self):
         while not self.is_evaluated():
-            if isinstance(self.get_current_to_evaluate(), CallOperation):
-                if 'return' in self.get_current_to_evaluate().get_source():
-                    self.add_temp_result(self.get_current_to_evaluate().get_source()['result'])
+            if isinstance(self.get_current_operation(), CallOperation):
+                if 'return' in self.get_current_operation().get_source():
+                    self.add_temp_result(self.get_current_operation().get_source()['result'])
                     self.next_operation_computing()
                 else:
-                    raise CallException(self.get_current_to_evaluate())
+                    raise CallException(self.get_current_operation())
             else:
-                self.add_temp_result(self.get_current_to_evaluate().evaluate())
+                self.add_temp_result(self.get_current_operation().evaluate())
                 self.next_operation_computing()
         else:
             return self.finish()
@@ -179,6 +175,15 @@ class ComputingOperation(ComplexOperation):
 
     def prev_operation(self):
         Operation.debugger.controller.prev_operation_computing(self)
+        
+    def revert(self):
+        while self.get_index() > 0:
+            if isinstance(self.get_current_operation(), CallOperation):
+                raise CallException(-1)
+            else:
+                self.prev_operation()
+        else:
+            self.finalize()
 
 
 class BreakOperation(SingleOperation):
@@ -188,10 +193,7 @@ class BreakOperation(SingleOperation):
 
     def evaluate(self):
         raise BreakException
-
-    def get_current_to_revert(self):
-        return self
-
+    
 
 class ConstantOperation(SingleOperation):
 
@@ -229,14 +231,11 @@ class ReturnOperation(ComplexOperation):
         ComplexOperation.__init__(self, operations)
 
     def evaluate(self):
-        if not self.get_current_to_evaluate():
+        if not self.get_current_operation():
             raise ReturnException(-1)
         else:
-            result = self.get_current_to_evaluate().evaluate()
+            result = self.get_current_operation().evaluate()
             raise ReturnException(result)
-
-    def get_current_to_revert(self):
-        return self
 
 
 class BinaryOperation(ComputingOperation):
@@ -315,11 +314,8 @@ class AugAssignOperation(ComputingOperation):
         return -1
 
     def revert(self):
+        super(AugAssignOperation, self).revert()
         Operation.debugger.revert_target(self.target)
-        self.finalize()
-
-    def get_current_to_revert(self):
-        return self
 
 
 class AssignOperation(ComputingOperation):
@@ -335,11 +331,8 @@ class AssignOperation(ComputingOperation):
         return -1
 
     def revert(self):
+        super(AssignOperation, self).revert()
         Operation.debugger.revert_targets(self.targets)
-        self.finalize()
-
-    def get_current_to_revert(self):
-        return self
 
 
 class ListOperation(ComputingOperation):
@@ -412,15 +405,12 @@ class WhileOperation(ComplexOperation):
 
     def evaluate(self):
         if self.get_index() == 0:
-            evaluation = self.get_current_to_evaluate().evaluate()
+            evaluation = self.get_current_operation().evaluate()
             if Operation.debugger.get_value(evaluation):
                 self.number[-1] += 1
             return evaluation
         else:
-            return self.get_current_to_evaluate().evaluate()
-
-    def revert(self):
-        self.get_current_to_revert().revert()
+            return self.get_current_operation().evaluate()
 
     def next_operation(self, evaluation):
         Operation.debugger.controller.next_operation_while(self, evaluation)
@@ -464,13 +454,10 @@ class ForOperation(ComplexOperation):
 
     def evaluate(self):
         if self.get_index() == 0:
-            evaluation = self.get_current_to_evaluate().evaluate()
+            evaluation = self.get_current_operation().evaluate()
             self.iterable.append(Operation.debugger.get_value(evaluation))
             return evaluation
-        return self.get_current_to_evaluate().evaluate()
-
-    def revert(self):
-        self.get_current_to_revert().revert()
+        return self.get_current_operation().evaluate()
 
     def next_operation(self, evaluation):
         Operation.debugger.controller.next_operation_for(self, evaluation)
@@ -492,13 +479,10 @@ class IfThenElseOperation(ComplexOperation):
 
     def evaluate(self):
         if self.get_index() == 0:
-            evaluation = self.get_current_to_evaluate().evaluate()
+            evaluation = self.get_current_operation().evaluate()
             self.choices.append(evaluation)
             return evaluation
-        return self.get_current_to_evaluate().evaluate()
-
-    def revert(self):
-        self.get_current_to_revert().revert()
+        return self.get_current_operation().evaluate()
 
     def next_operation(self, evaluation):
         Operation.debugger.controller.next_operation_if(self, evaluation)
@@ -525,10 +509,8 @@ class AttributeOperation(ComputingOperation):
         return not Operation.debugger.memory_handler.is_immutable(self.result)
 
     def revert(self):
+        super(AttributeOperation, self).revert()
         Operation.debugger.revert_target(self.target)
-
-    def get_current_to_revert(self):
-        return self
 
 
 class SliceOperation(ComputingOperation):
@@ -602,7 +584,7 @@ class CallOperation(ComplexOperation):
     def evaluate(self):
         while len(self.source) < len(self.args):
             self.evaluate_mapping()
-        self.set_operation(self.get_current_to_evaluate())
+        self.set_operation(self.get_current_operation())
         return self.operation.evaluate()
 
     def get_source(self):
