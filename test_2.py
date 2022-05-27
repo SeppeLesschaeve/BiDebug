@@ -4,5 +4,5 @@ def fibonacci(n):
         fib.append(fib[-1] + fib[-2])
     return fib[-1]
 
-for i in range(10):
+for i in range(5):
     print(fibonacci(i))

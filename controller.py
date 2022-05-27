@@ -43,7 +43,7 @@ class Controller:
         else:
             operation.parent.prev_operation()
 
-    def next_operation_computing(self, operation: ComputingOperation, evaluation):
+    def next_operation_computing(self, operation: ComputingOperation):
         if operation.get_index() < len(operation.operations):
             self.set_next(operation)
 
@@ -63,13 +63,16 @@ class Controller:
             if operation.name != 'boot':
                 raise ReturnException(-1)
             else:
-                raise StopException
+                operation.operation = operation
 
     def prev_operation_call(self, operation: CallOperation):
         if operation.get_index() > 0:
             operation.index[-1] -= 1
             if isinstance(operation.operations[operation.index[-1]], CallOperation):
                 raise CallException(operation.operations[operation.index[-1]])
+            elif operation.operations[operation.index[-1]].is_controllable():
+                operation.set_operation(operation.operations[operation.index[-1]])
+                operation.get_operation().prev_operation()
         else:
             if operation.name != 'boot':
                 raise BackwardException
@@ -82,11 +85,10 @@ class Controller:
                 self.next_operation_complex(operation, evaluation)
             else:
                 operation.parent.next_operation(evaluation)
-        else:
-            if operation.get_index() < len(operation.operations):
-                self.set_next(operation)
-            else:
-                operation.index[-1] = 0
+        elif operation.get_index() < len(operation.operations):
+            self.set_next(operation)
+            if operation.get_index() == len(operation.operations):
+                operation.initialize()
 
     def prev_operation_while(self, operation: WhileOperation):
         if operation.get_index() == 1 and operation.number[-1] != 0:
@@ -94,6 +96,9 @@ class Controller:
             operation.number[-1] -= 1
             if isinstance(operation.operations[operation.index[-1]], CallOperation):
                 raise CallException(operation.operations[operation.index[-1]])
+            elif operation.operations[operation.index[-1]].is_controllable():
+                self.debugger.get_call().set_operation(operation.operations[operation.index[-1]])
+                self.debugger.get_call().get_operation().prev_operation()
         elif operation.get_index() == 1 and operation.number[-1] == 0:
             operation.finalize()
             operation.parent.prev_operation()
@@ -101,6 +106,9 @@ class Controller:
             operation.index[-1] -= 1
             if isinstance(operation.operations[operation.index[-1]], CallOperation):
                 raise CallException(operation.operations[operation.index[-1]])
+            elif operation.operations[operation.index[-1]].is_controllable():
+                self.debugger.get_call().set_operation(operation.operations[operation.index[-1]])
+                self.debugger.get_call().get_operation().prev_operation()
     
     def next_operation_for(self, operation: ForOperation, evaluation):
         if operation.get_index() == 0:
@@ -128,6 +136,9 @@ class Controller:
             Operation.debugger.revert_target(operation.target)
             if isinstance(operation.operations[operation.index[-1]], CallOperation):
                 raise CallException(operation.operations[operation.index[-1]])
+            elif operation.operations[operation.index[-1]].is_controllable():
+                self.debugger.get_call().set_operation(operation.operations[operation.index[-1]])
+                self.debugger.get_call().get_operation().prev_operation()
         if operation.get_index() == 1 and operation.iter[-1] == 0:
             operation.finalize()
             operation.parent.prev_operation()
@@ -135,6 +146,9 @@ class Controller:
             operation.index[-1] -= 1
             if isinstance(operation.operations[operation.index[-1]], CallOperation):
                 raise CallException(operation.operations[operation.index[-1]])
+            elif operation.operations[operation.index[-1]].is_controllable():
+                self.debugger.get_call().set_operation(operation.operations[operation.index[-1]])
+                self.debugger.get_call().get_operation().prev_operation()
     
     def next_operation_if(self, operation: IfThenElseOperation, evaluation):
         if operation.get_index() == 0:
@@ -170,6 +184,9 @@ class Controller:
             operation.index[-1] -= 1
             if isinstance(operation.operations[operation.index[-1]], CallOperation):
                 raise CallException(operation.operations[operation.index[-1]])
+            elif operation.operations[operation.index[-1]].is_controllable():
+                self.debugger.get_call().set_operation(operation.operations[operation.index[-1]])
+                self.debugger.get_call().get_operation().prev_operation()
 
     def next_operation_break(self, operation):
         if isinstance(operation.parent, ForOperation) or isinstance(operation.parent, WhileOperation):

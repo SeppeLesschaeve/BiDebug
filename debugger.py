@@ -20,7 +20,7 @@ class Debugger:
         self.memory_handler = MemoryHandler()
         self.call_stack = []
         self.index = 0
-        copy_of_operations = copy.deepcopy(self.program_builder.get_function_operations('boot'))
+        copy_of_operations = copy.deepcopy(self.get_function_operations('boot'))
         call_operation = CallOperation('boot', [], copy_of_operations)
         for operation in call_operation.operations:
             operation.parent = call_operation
@@ -102,13 +102,12 @@ class Debugger:
             except BreakException:
                 self.controller.next_operation_break(self.get_call().get_current_to_evaluate)
             except ReturnException as r:
-                self.add_result('return', r.return_value)
-                self.go_back(r.return_value)
-                self.execute(number)
+                self.add_result('return', r.return_address)
+                self.go_back(r.return_address)
         elif number == 2:
             while True:
                 try:
-                    self.get_call().get_current_to_revert().prev_operation()
+                    self.get_call().get_operation().prev_operation()
                     self.execute_backward()
                     break
                 except StartException:
@@ -121,10 +120,12 @@ class Debugger:
             raise EndException
 
     def execute_forward(self):
+        if self.get_call().name == 'boot' and self.get_call().get_index() == len(self.get_call().operations):
+            raise StopException
         return self.get_call().get_operation().evaluate()
 
     def execute_backward(self):
-        self.get_call().get_current_to_revert().revert()
+        self.get_call().get_operation().revert()
 
     def get_last_allocated(self):
         return self.memory_handler.address - 1
