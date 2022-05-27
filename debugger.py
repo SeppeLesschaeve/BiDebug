@@ -142,6 +142,13 @@ class Debugger:
     def get_value(self, address):
         return self.memory_handler.get_value(address)
 
+infile = open("infile.txt")
+def input():
+    try:
+        return infile.readline()
+    except EOFError:
+        return None
+
 def main(source_program):
     debugger = Debugger(source_program)
     while True:
@@ -154,6 +161,8 @@ def main(source_program):
                 print(key, ' : ', value)
         except EndException:
             break
+        except ValueError:
+            return
 
 
 if __name__ == '__main__':
