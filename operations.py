@@ -109,13 +109,16 @@ class ComplexOperation(Operation):
 
     def finalize(self):
         self.index.pop()
-
+        
+    def can_be_finalized(self):
+        return self.index[-1] == 0
+    
     def evaluate(self):
         return self.get_current_operation().evaluate()
 
     def revert(self):
         self.get_current_operation().revert()
-        if self.get_index() == 0:
+        if self.can_be_finalized():
             self.finalize()
 
     def next_operation(self, evaluation):
@@ -168,7 +171,7 @@ class ComputingOperation(ComplexOperation):
     def handle_return(self, evaluation):
         self.add_temp_result(evaluation)
         self.next_operation_computing()
-        Operation.debugger.execute(2)
+        Operation.debugger.execute(1)
 
     def next_operation_computing(self):
         Operation.debugger.controller.next_operation_computing(self)
@@ -178,12 +181,10 @@ class ComputingOperation(ComplexOperation):
         
     def revert(self):
         while self.get_index() > 0:
-            if isinstance(self.get_current_operation(), CallOperation):
-                raise CallException(-1)
-            else:
-                self.prev_operation()
+            self.prev_operation()
         else:
-            self.finalize()
+            if self.can_be_finalized():
+                self.finalize()
 
 
 class BreakOperation(SingleOperation):
@@ -403,6 +404,9 @@ class WhileOperation(ComplexOperation):
         self.number.pop()
         super(WhileOperation, self).finalize()
 
+    def can_be_finalized(self):
+        return self.number[-1] == 0 and super(WhileOperation, self).can_be_finalized()
+
     def evaluate(self):
         if self.get_index() == 0:
             evaluation = self.get_current_operation().evaluate()
@@ -451,6 +455,9 @@ class ForOperation(ComplexOperation):
         self.iter.pop()
         self.iterable.pop()
         super(ForOperation, self).finalize()
+        
+    def can_be_finalized(self):
+        return self.iter[-1] == 0 and super(ForOperation, self).can_be_finalized()
 
     def evaluate(self):
         if self.get_index() == 0:
