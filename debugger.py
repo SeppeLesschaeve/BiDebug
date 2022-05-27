@@ -1,4 +1,6 @@
 import copy
+from time import perf_counter
+import time
 
 from operations import Operation, CallOperation, BreakException, CallException, ReturnException, BackwardException
 from controller import Controller, StopException, StartException
@@ -171,4 +173,7 @@ if __name__ == '__main__':
     program = ""
     for line in f.readlines():
         program += line
+    t = time.perf_counter()
     main(program)
+    t = time.perf_counter() - t
+    print(t)
