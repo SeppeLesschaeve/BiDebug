@@ -166,7 +166,7 @@ def main(source_program):
 
 
 if __name__ == '__main__':
-    file_name = "test_2.py"
+    file_name = "proef_statement.py"
     f = open(file_name)
     program = ""
     for line in f.readlines():
