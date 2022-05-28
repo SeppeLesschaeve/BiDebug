@@ -237,6 +237,10 @@ class ReturnOperation(ComplexOperation):
         else:
             result = self.get_current_operation().evaluate()
             raise ReturnException(result)
+        
+    def finalize(self):
+        super(ReturnOperation, self).finalize()
+        Operation.debugger.revert_target('return')
 
 
 class BinaryOperation(ComputingOperation):
@@ -435,6 +439,9 @@ class IterOperation(SingleOperation):
             parent.iter[-1] += 1
         return -1
 
+    def revert(self):
+        Operation.debugger.revert_target(self.parent.target)
+
 
 class ForOperation(ComplexOperation):
 
@@ -507,17 +514,17 @@ class AttributeOperation(ComputingOperation):
 
     def finish(self):
         value = [Operation.debugger.get_value(address) for address in self.temporary_values]
+        duplicate = copy.deepcopy(Operation.debugger.get_referenced_value(self.target))
+        Operation.debugger.update_target(self.target, duplicate)
         self.result = getattr(Operation.debugger.get_referenced_value(self.target), self.attr)(*value)
-        Operation.debugger.insert_value(self)
         self.temporary_values = []
         return Operation.debugger.get_last_allocated()
 
+    def finalize(self):
+        Operation.debugger.revert_target(self.target)
+
     def is_mutable(self):
         return not Operation.debugger.memory_handler.is_immutable(self.result)
-
-    def revert(self):
-        super(AttributeOperation, self).revert()
-        Operation.debugger.revert_target(self.target)
 
 
 class SliceOperation(ComputingOperation):
@@ -593,6 +600,9 @@ class CallOperation(ComplexOperation):
             self.evaluate_mapping()
         self.set_operation(self.get_current_operation())
         return self.operation.evaluate()
+
+    def revert(self):
+        self.get_current_operation().revert()
 
     def get_source(self):
         return self.source

@@ -36,18 +36,29 @@ class Debugger:
     def get_prev_call(self):
         return self.call_stack[self.index - 1]
 
-    def go_back(self, evaluation):
-        self.index -= 1
-        self.get_call().operation.get_current_operation().handle_return(evaluation)
-
     def get_function_args(self, name):
         return self.program_builder.get_function_args(name)
 
     def get_function_operations(self, name):
         return self.program_builder.get_function_operations(name)
 
+    def get_last_allocated(self):
+        return self.memory_handler.address - 1
+
+    def is_mutable(self, address):
+        return self.memory_handler.is_mutable(address)
+
+    def get_reference(self, name):
+        return self.get_active_source(name)[name][-1]
+
+    def insert_value(self, operation):
+        self.memory_handler.put_value(operation)
+
+    def get_value(self, address):
+        return self.memory_handler.get_value(address)
+
     def get_referenced_value(self, name):
-        return self.memory_handler.get_value(self.get_active_source(name)[name][-1])
+        return self.memory_handler.get_value(self.get_reference(name))
 
     def update_target(self, target, value):
         self.memory_handler.update_target(target, value, self.get_active_source(target))
@@ -88,6 +99,14 @@ class Debugger:
         self.call_stack.pop(self.index)
         self.index -= 1
 
+    def go_back(self, evaluation):
+        try:
+            self.controller.next_operation_call(self.get_call())
+        except ReturnException:
+            pass
+        self.index -= 1
+        self.get_call().operation.get_current_operation().handle_return(evaluation)
+
     def call_back(self):
         self.index += 1
         self.execute(2)
@@ -107,17 +126,16 @@ class Debugger:
                 self.add_result('return', r.return_address)
                 self.go_back(r.return_address)
         elif number == 2:
-            while True:
-                try:
-                    self.get_call().get_operation().prev_operation()
-                    self.execute_backward()
-                    break
-                except StartException:
-                    return
-                except BackwardException:
-                    self.pop()
-                except CallException:
-                    self.call_back()
+            try:
+                self.get_call().get_operation().prev_operation()
+                self.execute_backward()
+            except StartException:
+                return
+            except BackwardException:
+                self.pop()
+                self.execute_backward()
+            except CallException:
+                self.call_back()
         elif number == 3:
             raise EndException
 
@@ -129,27 +147,6 @@ class Debugger:
     def execute_backward(self):
         self.get_call().get_operation().revert()
 
-    def get_last_allocated(self):
-        return self.memory_handler.address - 1
-
-    def is_mutable(self, address):
-        return self.memory_handler.is_mutable(address)
-
-    def get_reference(self, name):
-        return self.get_active_source(name)[name][-1]
-
-    def insert_value(self, operation):
-        self.memory_handler.put_value(operation)
-
-    def get_value(self, address):
-        return self.memory_handler.get_value(address)
-
-infile = open("infile.txt")
-def input():
-    try:
-        return infile.readline()
-    except EOFError:
-        return None
 
 def main(source_program):
     debugger = Debugger(source_program)
@@ -158,22 +155,17 @@ def main(source_program):
             print('new step: ')
             number = int(input())
             debugger.execute(number)
-            for key, value in debugger.get_call().get_source().items():
-                value = debugger.memory_handler.get_value(value[-1])
+            for key, val in debugger.get_call().get_source().items():
+                value = debugger.memory_handler.get_value(val[-1])
                 print(key, ' : ', value)
         except EndException:
             break
-        except ValueError:
-            return
 
 
 if __name__ == '__main__':
-    file_name = "proef_statement.py"
+    file_name = "test_2.py"
     f = open(file_name)
     program = ""
     for line in f.readlines():
         program += line
-    t = time.perf_counter()
     main(program)
-    t = time.perf_counter() - t
-    print(t)

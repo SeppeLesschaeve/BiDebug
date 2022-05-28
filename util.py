@@ -61,7 +61,7 @@ class MemoryHandler:
 
     def revert_target(self, target, source):
         address = source[target][-1]
-        if self.inv_value(address):
+        if address not in self.reference_values or self.inv_value(address):
             source[target].pop()
             if not source[target]:
                 source.pop(target)
