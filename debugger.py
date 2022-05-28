@@ -147,6 +147,12 @@ class Debugger:
     def execute_backward(self):
         self.get_call().get_operation().revert()
 
+infile = open("infile.txt")
+def input():
+    try:
+        return infile.readline()
+    except EOFError:
+        return None
 
 def main(source_program):
     debugger = Debugger(source_program)
@@ -163,9 +169,10 @@ def main(source_program):
 
 
 if __name__ == '__main__':
-    file_name = "test_2.py"
+    file_name = "proef_statement.py"
     f = open(file_name)
     program = ""
     for line in f.readlines():
         program += line
     main(program)
+    infile.close()
