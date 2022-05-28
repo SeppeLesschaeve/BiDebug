@@ -103,9 +103,8 @@ class Debugger:
         try:
             self.controller.next_operation_call(self.get_call())
         except ReturnException:
-            pass
-        self.index -= 1
-        self.get_call().operation.get_current_operation().handle_return(evaluation)
+            self.index -= 1
+            self.get_call().operation.get_current_operation().handle_return(evaluation)
 
     def call_back(self):
         self.index += 1
