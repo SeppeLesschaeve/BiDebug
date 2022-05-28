@@ -101,11 +101,17 @@ class ComplexOperation(Operation):
         return self.index[-1]
 
     def get_current_operation(self):
-        return self.operations[self.get_index()]
+        if self.operations:
+            return self.operations[self.get_index()]
+        else:
+            return None
 
     def initialize(self):
         self.index.append(0)
-        self.get_current_operation().initialize()
+        if self.operations:
+            self.get_current_operation().initialize()
+        else:
+            print('42')
 
     def finalize(self):
         self.index.pop()

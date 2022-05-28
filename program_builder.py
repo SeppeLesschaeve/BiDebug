@@ -22,6 +22,7 @@ class ProgramBuilder(ast.NodeVisitor):
                 boot_part.append(self.visit(program))
             else:
                 self.visit(program)
+        boot_part.append(operations.ReturnOperation([]))
         boot = [[], boot_part]
         for statement in boot_part:
             statement.parent = boot
@@ -34,6 +35,8 @@ class ProgramBuilder(ast.NodeVisitor):
         ops = []
         for statement in node.body:
             ops.append(self.visit(statement))
+        if not isinstance(ops[-1], operations.ReturnOperation):
+            ops.append(operations.ReturnOperation([]))
         function_def = [args, ops]
         self.functions[node.name] = function_def
 
