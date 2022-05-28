@@ -156,16 +156,23 @@ def input():
 
 def main(source_program):
     debugger = Debugger(source_program)
+    total_time = 0
     while True:
         try:
             print('new step: ')
             number = int(input())
+            t = time.perf_counter()
             debugger.execute(number)
+            t = time.perf_counter() - t
+            total_time += t
             for key, val in debugger.get_call().get_source().items():
                 value = debugger.memory_handler.get_value(val[-1])
                 print(key, ' : ', value)
         except EndException:
             break
+        except ValueError:
+            continue
+    print("time taken: ",total_time)
 
 
 if __name__ == '__main__':
