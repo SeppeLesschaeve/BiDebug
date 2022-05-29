@@ -78,6 +78,7 @@ class Controller:
             if operation.name != 'boot':
                 raise BackwardException
             else:
+                operation.set_operation(operation)
                 raise StartException
     
     def next_operation_while(self, operation: WhileOperation, evaluation):
@@ -186,7 +187,10 @@ class Controller:
                     operation.parent.next_operation(evaluation)
 
     def prev_operation_if(self, operation: IfThenElseOperation):
-        if operation.get_index() == operation.then_index and operation.choices[-1]:
+        if operation.get_index() == 0:
+            operation.finalize()
+            operation.parent.prev_operation()
+        elif operation.get_index() == operation.then_index and operation.choices[-1]:
             operation.finalize()
             operation.parent.prev_operation()
         elif operation.get_index() == operation.else_index and not operation.choices[-1]:

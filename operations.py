@@ -230,6 +230,16 @@ class NameOperation(SingleOperation):
         return Operation.debugger.is_mutable(Operation.debugger.get_reference(self.name))
 
 
+class PassOperation(SingleOperation):
+
+    def __init__(self):
+        SingleOperation.__init__(self)
+
+    def evaluate(self):
+        Operation.debugger.insert_value(self)
+        return Operation.debugger.get_last_allocated()
+
+
 class ReturnOperation(ComplexOperation):
 
     def __init__(self, operations):
@@ -496,7 +506,8 @@ class IfThenElseOperation(ComplexOperation):
         return True
     
     def finalize(self):
-        self.choices.pop()
+        if self.choices:
+            self.choices.pop()
         super(IfThenElseOperation, self).finalize()
 
     def evaluate(self):

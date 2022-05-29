@@ -145,7 +145,7 @@ class ProgramBuilder(ast.NodeVisitor):
         return self.visit(node.value)
 
     def visit_Pass(self, node: Pass) -> Any:
-        return node
+        return operations.PassOperation()
 
     def visit_Break(self, node: Break) -> Any:
         return operations.BreakOperation()
