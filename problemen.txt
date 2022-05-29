@@ -1,7 +1,6 @@
 problemen in voorwaartse uitvoer met:
 	modulo, bijv 1 % 1
 	unaryOp, bijv not True
-	if, bijv if True: 1+1
 	functions, bijv def f(): return 1 en dan f()
 problemen in achterwaartse uitvoer met:
 	modulo, bijv 1 % 1

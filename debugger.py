@@ -162,11 +162,10 @@ def main(source_program):
         try:
             print('new step: ')
             number = int(input())
-            if number == 2:
-                t = time.perf_counter()
+            t = time.perf_counter()
             debugger.execute(number)
             t2 = time.perf_counter()
-            if number == 2:
+            if number == 1:
                 total_time += t2 - t
             for key, val in debugger.get_call().get_source().items():
                 value = debugger.memory_handler.get_value(val[-1])
@@ -179,7 +178,7 @@ def main(source_program):
 
 
 if __name__ == '__main__':
-    file_name = "test_2.py"
+    file_name = "proef_statement.py"
     f = open(file_name)
     program = ""
     for line in f.readlines():
