@@ -103,8 +103,9 @@ class Debugger:
         try:
             self.controller.next_operation_call(self.get_call())
         except ReturnException:
-            self.index -= 1
-            self.get_call().operation.get_current_operation().handle_return(evaluation)
+            pass
+        self.index -= 1
+        self.get_call().operation.get_current_operation().handle_return(evaluation)
 
     def call_back(self):
         self.index += 1
@@ -155,16 +156,26 @@ def input():
 
 def main(source_program):
     debugger = Debugger(source_program)
+    total_time = 0
+    t = 0.0
     while True:
         try:
             print('new step: ')
             number = int(input())
+            if number == 2:
+                t = time.perf_counter()
             debugger.execute(number)
+            t2 = time.perf_counter()
+            if number == 2:
+                total_time += t2 - t
             for key, val in debugger.get_call().get_source().items():
                 value = debugger.memory_handler.get_value(val[-1])
                 print(key, ' : ', value)
         except EndException:
             break
+        except ValueError:
+            continue
+    print("time taken: ",total_time)
 
 
 if __name__ == '__main__':
