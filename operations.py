@@ -494,6 +494,10 @@ class IfThenElseOperation(ComplexOperation):
 
     def is_controllable(self):
         return True
+    
+    def finalize(self):
+        self.choices.pop()
+        super(IfThenElseOperation, self).finalize()
 
     def evaluate(self):
         if self.get_index() == 0:
