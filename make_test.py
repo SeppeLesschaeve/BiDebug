@@ -2,12 +2,12 @@ from operator import mod
 
 
 if __name__ == "__main__":
-    amount = 500
+    amount = 1000
     f = open("proef_statement.py",mode="w+")
     f.truncate(0)
-    f.write("i = 1\n")
+    f.write("def f():\n\tpass\n")
     for i in range(amount):
-        f.write("while i == 1:\n\ti -= 1\nwhile i == 0:\n\ti += 1\n")
+        f.write("f()\n")
     f.close()
     f = open("infile.txt",mode="w+")
     f.truncate(0)

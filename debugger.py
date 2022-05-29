@@ -165,7 +165,7 @@ def main(source_program):
             t = time.perf_counter()
             debugger.execute(number)
             t2 = time.perf_counter()
-            if number == 2:
+            if number == 1:
                 total_time += t2 - t
             for key, val in debugger.get_call().get_source().items():
                 value = debugger.memory_handler.get_value(val[-1])
