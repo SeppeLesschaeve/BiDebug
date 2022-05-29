@@ -101,6 +101,8 @@ class Controller:
             elif operation.operations[operation.index[-1]].is_controllable():
                 self.debugger.get_call().set_operation(operation.operations[operation.index[-1]])
                 self.debugger.get_call().get_operation().prev_operation()
+            else:
+                self.debugger.get_call().set_operation(operation)
         elif operation.get_index() <= 1 and operation.number[-1] == 0:
             operation.finalize()
             operation.parent.prev_operation()
@@ -111,6 +113,8 @@ class Controller:
             elif operation.operations[operation.index[-1]].is_controllable():
                 self.debugger.get_call().set_operation(operation.operations[operation.index[-1]])
                 self.debugger.get_call().get_operation().prev_operation()
+            else:
+                self.debugger.get_call().set_operation(operation)
     
     def next_operation_for(self, operation: ForOperation, evaluation):
         if operation.get_index() == 0:
@@ -128,6 +132,8 @@ class Controller:
                 if operation.iter[-1] < len(operation.iterable[-1]):
                     if operation.get_current_operation().is_controllable():
                         self.debugger.get_call().set_operation(operation.get_current_operation())
+                    else:
+                        self.debugger.get_call().set_operation(operation)
                 else:
                     operation.parent.next_operation(evaluation)
 
@@ -140,6 +146,8 @@ class Controller:
             elif operation.operations[operation.index[-1]].is_controllable():
                 self.debugger.get_call().set_operation(operation.operations[operation.index[-1]])
                 self.debugger.get_call().get_operation().prev_operation()
+            else:
+                self.debugger.get_call().set_operation(operation)
         elif operation.get_index() == 1 and operation.iter[-1] == 0:
             operation.finalize()
             operation.parent.prev_operation()
@@ -150,6 +158,8 @@ class Controller:
             elif operation.operations[operation.index[-1]].is_controllable():
                 self.debugger.get_call().set_operation(operation.operations[operation.index[-1]])
                 self.debugger.get_call().get_operation().prev_operation()
+            else:
+                self.debugger.get_call().set_operation(operation)
     
     def next_operation_if(self, operation: IfThenElseOperation, evaluation):
         if operation.get_index() == 0:
@@ -163,16 +173,17 @@ class Controller:
             if operation.choices[-1]:
                 if operation.index[-1] < operation.else_index:
                     operation.index[-1] += 1
+                if operation.index[-1] < operation.else_index:
                     operation.get_current_operation().initialize()
                 else:
                     operation.parent.next_operation(evaluation)
             else:
                 if operation.get_index() < len(operation.operations):
                     operation.index[-1] += 1
-                    if operation.get_index() < len(operation.operations):
-                        operation.get_current_operation().initialize()
-                    else:
-                        operation.parent.next_operation(evaluation)
+                if operation.get_index() < len(operation.operations):
+                    operation.get_current_operation().initialize()
+                else:
+                    operation.parent.next_operation(evaluation)
 
     def prev_operation_if(self, operation: IfThenElseOperation):
         if operation.get_index() == operation.then_index and operation.choices[-1]:
@@ -188,6 +199,8 @@ class Controller:
             elif operation.operations[operation.index[-1]].is_controllable():
                 self.debugger.get_call().set_operation(operation.operations[operation.index[-1]])
                 self.debugger.get_call().get_operation().prev_operation()
+            else:
+                self.debugger.get_call().set_operation(operation)
 
     def next_operation_break(self, operation):
         if isinstance(operation.parent, ForOperation) or isinstance(operation.parent, WhileOperation):

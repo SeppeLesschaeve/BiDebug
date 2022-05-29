@@ -110,8 +110,6 @@ class ComplexOperation(Operation):
         self.index.append(0)
         if self.operations:
             self.get_current_operation().initialize()
-        else:
-            print('42')
 
     def finalize(self):
         self.index.pop()
@@ -500,7 +498,7 @@ class IfThenElseOperation(ComplexOperation):
     def evaluate(self):
         if self.get_index() == 0:
             evaluation = self.get_current_operation().evaluate()
-            self.choices.append(evaluation)
+            self.choices.append(Operation.debugger.get_value(evaluation))
             return evaluation
         return self.get_current_operation().evaluate()
 

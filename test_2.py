@@ -6,3 +6,7 @@ def fibonacci(n):
 
 for i in range(5):
     print(fibonacci(i))
+    if i < 3:
+        print('low')
+    else:
+        print('high')

@@ -107,7 +107,7 @@ class ProgramBuilder(ast.NodeVisitor):
             ops.append(statement)
         for statement in else_operations:
             ops.append(statement)
-        if_then_else_operation = operations.IfThenElseOperation(ops, 1 + len(then_operations))
+        if_then_else_operation = operations.IfThenElseOperation(1 + len(then_operations), ops)
         for operation in then_operations:
             operation.parent = if_then_else_operation
         for operation in else_operations:
