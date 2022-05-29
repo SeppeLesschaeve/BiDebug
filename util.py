@@ -60,6 +60,8 @@ class MemoryHandler:
             source[target].append(self.address - 1)
 
     def revert_target(self, target, source):
+        if target not in source:
+            return
         address = source[target][-1]
         if address not in self.reference_values or self.inv_value(address):
             source[target].pop()
