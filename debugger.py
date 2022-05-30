@@ -103,9 +103,11 @@ class Debugger:
     def go_back(self, evaluation):
         try:
             self.controller.next_operation_call(self.get_call())
+            if self.index > 0:
+                self.index -= 1
+                self.get_call().operation.get_current_operation().handle_return(evaluation)
         except ReturnException:
-            self.index -= 1
-            self.get_call().operation.get_current_operation().handle_return(evaluation)
+            self.go_back(evaluation)
 
     def call_back(self):
         self.index += 1
