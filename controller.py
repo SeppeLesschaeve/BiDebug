@@ -1,5 +1,5 @@
 from operations import ComplexOperation, WhileOperation, ForOperation, IfThenElseOperation, CallOperation, \
-    ComputingOperation, ReturnException, BackwardException, Operation, CallException
+    ComputingOperation, ReturnException, BackwardException, CallException
 
 
 class StartException(Exception):

@@ -1,5 +1,4 @@
 import copy
-from time import perf_counter
 import time
 
 from operations import Operation, CallOperation, BreakException, CallException, ReturnException, BackwardException
@@ -180,7 +179,7 @@ def main(source_program):
 
 
 if __name__ == '__main__':
-    file_name = "proef_statement.py"
+    file_name = "program.py"
     f = open(file_name)
     program = ""
     for line in f.readlines():

@@ -1,41 +1,38 @@
 import ast
-import builtins
-from tokenize import String
 
-def noop(a):
-    pass
+immutables = {tuple, int, float, complex, str, bytes}
 
-immutables = {tuple,int,float,complex,str,bytes}
+
 class SourceVisitor(ast.NodeVisitor):
-
     """Class variables"""
     funcs = {}
     globals = {}
-    add = lambda a,b : a + b
-    sub = lambda a,b : a - b
-    mul = lambda a,b : a * b
-    div = lambda a,b : a / b
-    en  = lambda a,b : a and b
-    of  = lambda a,b : a or b
-    niet = lambda a : not a
-    eq  = lambda a,b : a == b
-    neq = lambda a,b : a != b
-    lt  = lambda a,b : a < b
-    lte = lambda a,b : a <= b
-    gt  = lambda a,b : a > b
-    gte = lambda a,b : a >= b
-    inn = lambda a,b : a in b
-    nin = lambda a,b : a not in b
-    iss = lambda a,b : a is b
-    nis = lambda a,b : a is not b
-
+    add = lambda a, b: a + b
+    sub = lambda a, b: a - b
+    mul = lambda a, b: a * b
+    div = lambda a, b: a / b
+    en = lambda a, b: a and b
+    of = lambda a, b: a or b
+    niet = lambda a: not a
+    eq = lambda a, b: a == b
+    neq = lambda a, b: a != b
+    lt = lambda a, b: a < b
+    lte = lambda a, b: a <= b
+    gt = lambda a, b: a > b
+    gte = lambda a, b: a >= b
+    inn = lambda a, b: a in b
+    nin = lambda a, b: a not in b
+    iss = lambda a, b: a is b
+    nis = lambda a, b: a is not b
 
     """Class functions"""
+
     def constant(s):
         try:
             return int(s)
         except ValueError:
             return None
+
     def getIfList(s):
         try:
             return [int(i) for i in s[1:-1].split(",")]
@@ -43,27 +40,28 @@ class SourceVisitor(ast.NodeVisitor):
             return None
 
     """Constructor"""
-    def __init__(self,bidebugger,source={}):
+
+    def __init__(self, source={}):
         self.source = source
         self.referencePool = {}
         self.returnValue = None
-        self.bidebugger = bidebugger
-    
+
     """Methods"""
-    def unpack(self,v):
+
+    def unpack(self, v):
         """Unpacks a variable such that the return value is its actual value, not its name."""
-        if isinstance(v,ast.Name):
+        if isinstance(v, ast.Name):
             if v.id in self.source:
                 return self.source[self.visit(v)]
             elif v.id in SourceVisitor.globals:
                 return SourceVisitor.globals[self.visit(v)]
-        elif isinstance(v,ast.Slice):
-            step = getattr(v,"step",None)
+        elif isinstance(v, ast.Slice):
+            step = getattr(v, "step", None)
             if not step:
                 step = 1
             else:
                 step = self.visit(step)
-            return slice(self.visit(v.lower),self.visit(v.upper),step)
+            return slice(self.visit(v.lower), self.visit(v.upper), step)
         return self.visit(v)
 
     def visit_Constant(self, node):
@@ -73,16 +71,18 @@ class SourceVisitor(ast.NodeVisitor):
     def visit_Name(self, node):
         """Returns the name of the variable contained by the node."""
         return node.id
-    
+
     class Undefined:
         """A subclass to identify undefined global variables."""
+
         def __init__(self):
             pass
+
     def visit_Global(self, node):
         for name in node.names:
             SourceVisitor.globals[name] = SourceVisitor.Undefined()
 
-    #Dit werkt niet voor assignments voor meerdere variabelen, bijv. x,y = 1,2
+    # Dit werkt niet voor assignments voor meerdere variabelen, bijv. x,y = 1,2
     def visit_Assign(self, node):
         """
         Updates source such that the new state reflects the assignments made by the node.
@@ -93,25 +93,24 @@ class SourceVisitor(ast.NodeVisitor):
         """
         for target in node.targets:
             visitedTarget = self.visit(target)
-            if isinstance(target,ast.Tuple):
-                if not isinstance(node.value,ast.Tuple):
-                    raise TypeError("Cannot unpack non-iterable %s object"%str(type(node.value)))
+            if isinstance(target, ast.Tuple):
+                if not isinstance(node.value, ast.Tuple):
+                    raise TypeError("Cannot unpack non-iterable %s object" % str(type(node.value)))
                 visitedValue = self.unpack(node.value)
                 if not len(visitedTarget) == len(visitedValue):
-                    raise ValueError("Not enough values to unpack (expected %d, got %d)"%(len(visitedTarget),len(visitedValue)))
+                    raise ValueError(
+                        "Not enough values to unpack (expected %d, got %d)" % (len(visitedTarget), len(visitedValue)))
                 for i in range(len(visitedTarget)):
                     if visitedTarget[i] not in self.source and visitedTarget[i] in SourceVisitor.globals:
                         SourceVisitor.globals[visitedTarget[i]] = visitedValue[i]
                         continue
                     self.source[visitedTarget[i]] = visitedValue[i]
-                    self.bidebugger.add_state(self.copy_source())
-            else:   #Nog support nodig voor target geïndexeerd met slice of index!
-                    #Anders kunnen we bijv. niet a[1] = 2 of a[1:2] = [2] doen
+            else:  # Nog support nodig voor target geïndexeerd met slice of index!
+                # Anders kunnen we bijv. niet a[1] = 2 of a[1:2] = [2] doen
                 if visitedTarget in SourceVisitor.globals and visitedTarget not in self.source:
                     SourceVisitor.globals[visitedTarget] = self.unpack(node.value)
                 else:
                     self.source[self.visit(target)] = self.unpack(node.value)
-                    self.bidebugger.add_state(self.copy_source())
             self.printSource()
 
     def visit_Add(self, node):
@@ -141,19 +140,19 @@ class SourceVisitor(ast.NodeVisitor):
         """
         f = self.visit(node.op)
         unpackedValue = self.unpack(node.value)
-        if isinstance(node.target,ast.Name):
+        if isinstance(node.target, ast.Name):
             visitedTarget = self.visit(node.target)
             if visitedTarget in self.source:
-                self.source[visitedTarget] = f(self.source[visitedTarget],unpackedValue)
-                self.bidebugger.add_state(self.copy_source())
+                self.source[visitedTarget] = f(self.source[visitedTarget], unpackedValue)
             elif visitedTarget in SourceVisitor.globals:
-                SourceVisitor.globals[visitedTarget] = f(SourceVisitor.globals[visitedTarget],unpackedValue)
-        elif isinstance(node.target,ast.Subscript):
+                SourceVisitor.globals[visitedTarget] = f(SourceVisitor.globals[visitedTarget], unpackedValue)
+        elif isinstance(node.target, ast.Subscript):
             collectionName = self.visit(node.target.value)
-            if isinstance(node.target.slice,ast.Name):
+            if isinstance(node.target.slice, ast.Name):
                 indexName = node.target.slice.id
                 index = None
-                if indexName in self.source or (index := SourceVisitor.constant(indexName)) or (index := SourceVisitor.getIfList(indexName)):
+                if indexName in self.source or (index := SourceVisitor.constant(indexName)) or (
+                index := SourceVisitor.getIfList(indexName)):
                     if not index:
                         index = self.source[indexName]
                 elif indexName in SourceVisitor.globals:
@@ -161,14 +160,12 @@ class SourceVisitor(ast.NodeVisitor):
                 else:
                     raise ValueError("Index Undefined")
                 if collectionName in self.source:
-                    self.source[collectionName][index] = f(self.source[collectionName][index],unpackedValue)
-                    self.bidebugger.add_state(self.copy_source())
+                    self.source[collectionName][index] = f(self.source[collectionName][index], unpackedValue)
                 elif collectionName in SourceVisitor.globals:
-                    SourceVisitor.globals[collectionName][index] = f(self.source[collectionName][index],unpackedValue)
+                    SourceVisitor.globals[collectionName][index] = f(self.source[collectionName][index], unpackedValue)
             else:
                 raise NotImplementedError("Target collection probably indexed with a slice.")
         self.printSource()
-        
 
     def visit_Subscript(self, node):
         """Returns the slice of a collection in source that corresponds to the slice contained within the given Subscript node."""
@@ -180,17 +177,17 @@ class SourceVisitor(ast.NodeVisitor):
         val = self.unpack(node.value)
         return val[slce]
 
-    def visit_slice(self,node):
+    def visit_slice(self, node):
         """Returns a slice of indices for the given Slice node."""
-        return slice(node.lower,node.upper)
-        #of kan ook een slice values van de lijst zelf zijn, als ik het niet juist geïnterpreteerd heb zoals het er staat,
+        return slice(node.lower, node.upper)
+        # of kan ook een slice values van de lijst zelf zijn, als ik het niet juist geïnterpreteerd heb zoals het er staat,
         # maar het lijkt wel juist te zijn.
 
     def visit_Index(self, node):
         """Returns the value of a collection in source that corresponds to the value contained within the given Index node."""
         return self.source[self.visit(node.value)]
 
-    #Dit werkt volgens mij niet altijd, omdat je van node.comparators enkel de laatste entry behandelt.
+    # Dit werkt volgens mij niet altijd, omdat je van node.comparators enkel de laatste entry behandelt.
     # Ik zou niet weten hoe je er daar meerdere in zou kunnen steken though.
     def visit_Compare(self, node):
         """
@@ -211,9 +208,9 @@ class SourceVisitor(ast.NodeVisitor):
         fs = []
         for o in node.ops:
             fs.append(self.visit(o))
-        b = fs[0](comps[0],comps[1])
-        for i in range(1,len(fs)):
-            b = fs[i](b,comps[i])
+        b = fs[0](comps[0], comps[1])
+        for i in range(1, len(fs)):
+            b = fs[i](b, comps[i])
         return b
 
     def visit_Eq(self, node):
@@ -257,7 +254,7 @@ class SourceVisitor(ast.NodeVisitor):
     def visit_Tuple(self, node):
         """Returns a tuple in accordance with node."""
         l = []
-        if isinstance(node.ctx,ast.Store):
+        if isinstance(node.ctx, ast.Store):
             for el in node.elts:
                 l.append(self.visit(el))
             return tuple(l)
@@ -285,28 +282,13 @@ class SourceVisitor(ast.NodeVisitor):
         """Visits the expression contained by the node."""
         self.visit(node.value)
 
-    def visit_UnaryOp(self, node):
-        return self.visit(node.op)(self.visit(node.operand))
-    
-    def visit_UAdd(self, node):
-        return lambda a: 0+a
-    
-    def visit_USub(self, node):
-        return lambda a: 0-a
-    
-    def visit_Not(self, node):
-        return lambda a: not a
-    
-    def visit_Invert(self,node):
-        return lambda a: ~a
-
     def visit_BinOp(self, node):
         """Visits the binary operation contained by the node."""
         lefthand = self.unpack(node.left)
         righthand = self.unpack(node.right)
         f = self.visit(node.op)
         op = node.op
-        return f(lefthand,righthand)
+        return f(lefthand, righthand)
 
     def visit_If(self, node):
         """
@@ -331,7 +313,7 @@ class SourceVisitor(ast.NodeVisitor):
         lefthand = self.unpack(node.values[0])
         righthand = self.unpack(node.values[1])
         f = self.visit(node.op)
-        return f(lefthand,righthand)
+        return f(lefthand, righthand)
 
     def visit_And(self, node):
         """Returns a binary and function."""
@@ -340,7 +322,7 @@ class SourceVisitor(ast.NodeVisitor):
     def visit_Or(self, node):
         """Returns a binary or function."""
         return SourceVisitor.of
-    
+
     def visit_Not(self, node):
         return SourceVisitor.niet
 
@@ -391,22 +373,16 @@ class SourceVisitor(ast.NodeVisitor):
         """
         if self.isBuiltin(node):
             return self.visit_Builtin(node)
-        #print("function call: %s"%(node.func.id))
-        
+        print("function call: %s" % (node.func.id))
         self.makeReferencePool(node)
         ts = self.buildTempSource(node)
-        funcenv = SourceVisitor(self.bidebugger,ts)
+        funcenv = SourceVisitor(ts)
         for statement in SourceVisitor.funcs[node.func.id][1]:
             funcenv.visit(statement)
-            if funcenv.returnValue != None:
-                funcenv.source["returned"] = funcenv.returnValue
-                self.bidebugger.add_state(funcenv.source)
-                break
         for key in self.referencePool:
             self.source[self.referencePool[key]] = funcenv.source[key]
-        #print("return from: %s"%(node.func.id))
+        print("return from: %s" % (node.func.id))
         return funcenv.returnValue
-        
 
     def is_immutable(self, obj):
         """Returns whether an abject is immutable."""
@@ -414,9 +390,9 @@ class SourceVisitor(ast.NodeVisitor):
 
     def visit_Return(self, node):
         """Visits a return statement and assigns its evaluated value to the class' return value field."""
-        self.returnValue = self.unpack(node.value)
+        self.returnValue = self.visit(node.value)
 
-    #The iterator must be a deep copy of the associated element of the list.
+    # The iterator must be a deep copy of the associated element of the list.
     def visit_For(self, node):
         """
         Visits the relevant body for all elements in the collection over which the for loop iterates.
@@ -456,15 +432,13 @@ class SourceVisitor(ast.NodeVisitor):
         arguments = []
         for arg in node.args:
             arguments.append(self.unpack(arg))
-        if isinstance(node.func,ast.Name) and node.func.id == "print":
-            return noop(*arguments)
-        if isinstance(node.func, ast.Attribute):    #Dit valt voor wanneer de functie opgeroepen wordt op een object
+        if isinstance(node.func, ast.Attribute):  # Dit valt voor wanneer de functie opgeroepen wordt op een object
             if node.func.value.id in self.source:
                 return getattr(self.source[self.visit(node.func.value)], node.func.attr)(*arguments)
             elif node.func.value.id in SourceVisitor.globals:
                 return getattr(SourceVisitor.globals[node.func.value.id], node.func.attr)(*arguments)
         if isinstance(node.func, ast.Name):
-            return getattr(builtins, node.func.id)(*arguments)
+            return getattr(__builtins__, node.func.id)(*arguments)
 
     def buildTempSource(self, node):
         """
@@ -481,7 +455,7 @@ class SourceVisitor(ast.NodeVisitor):
         if isinstance(node.args, list):
             for i in range(0, len(node.args)):
                 visitedArg = self.visit(node.args[i])
-                if isinstance(visitedArg,str) and visitedArg in self.source:
+                if visitedArg in self.source:
                     tempSource[argnames[i]] = self.source[visitedArg]
                 else:
                     tempSource[argnames[i]] = visitedArg
@@ -490,24 +464,25 @@ class SourceVisitor(ast.NodeVisitor):
                 tempSource[node.keywords[j].arg] = self.source[self.visit(node.keywords[j].value)]
             else:
                 tempSource[node.keywords[j].arg] = self.visit(node.keywords[j].value)
-        #self.addAllFunctions(tempSource)
+        # self.addAllFunctions(tempSource)
         return tempSource
 
-    def addAllFunctions(self,tempSource):
+    def addAllFunctions(self, tempSource):
         """Adds all functions in source to the given temporary source."""
         for f in self.source:
             if self.isFunction(f):
                 tempSource[f] = self.source[f]
-    
-    def isFunction(self,f):
-        """Checks if the given node is a function defined in source."""
-        if not isinstance(self.source[f],list):
-            return False
-        if not isinstance(self.source[f][1],list):
-            return False
-        return isinstance(self.source[f][1][0],ast.Expr)   #Niet zeker of dit niet simpeler kan, of zelfs of dit volledig juist is.
 
-    def makeReferencePool(self,node):
+    def isFunction(self, f):
+        """Checks if the given node is a function defined in source."""
+        if not isinstance(self.source[f], list):
+            return False
+        if not isinstance(self.source[f][1], list):
+            return False
+        return isinstance(self.source[f][1][0],
+                          ast.Expr)  # Niet zeker of dit niet simpeler kan, of zelfs of dit volledig juist is.
+
+    def makeReferencePool(self, node):
         """
         Constructs a reference pool for mutables in a function call as follows:
             {function_parameter : source_variable}
@@ -521,11 +496,11 @@ class SourceVisitor(ast.NodeVisitor):
                     value -- the id for the argument as seen by source, the caller argument
         """
         references = {}
-        if not isinstance(node.args,list):
+        if not isinstance(node.args, list):
             raise RuntimeError("Incorrect function call: arguments are not in a list.")
-        for i,arg in enumerate(node.args):
+        for i, arg in enumerate(node.args):
             visitedArg = self.visit(arg)
-            if isinstance(visitedArg,str) and visitedArg in self.source and not self.is_immutable(self.source[visitedArg]):
+            if visitedArg in self.source and not self.is_immutable(self.source[visitedArg]):
                 references[SourceVisitor.funcs[node.func.id][0][i]] = visitedArg
         for arg in node.keywords:
             references[arg.arg] = self.visit(arg.value)
@@ -534,31 +509,28 @@ class SourceVisitor(ast.NodeVisitor):
     def isBuiltin(self, node):
         """Returns a boolean indicating whether a function is a built-in."""
         return isinstance(node.func, ast.Attribute) \
-               or (isinstance(node.func, ast.Name) and not SourceVisitor.funcs.get(node.func.id,False))
+               or (isinstance(node.func, ast.Name) and not SourceVisitor.funcs.get(node.func.id, False))
 
     def printSource(self):
-        """pSource = {}
+        pSource = {}
         for entry in self.source:
             pSource[entry] = self.source[entry]
         for entry in SourceVisitor.globals:
-            if isinstance(SourceVisitor.globals[entry],SourceVisitor.Undefined):
+            if isinstance(SourceVisitor.globals[entry], SourceVisitor.Undefined):
                 pSource[entry] = "Undefined"
                 continue
             pSource[entry] = SourceVisitor.globals[entry]
         for f in SourceVisitor.funcs:
-            pSource[f] = (len(SourceVisitor.funcs[f][0]),len(SourceVisitor.funcs[f][1]))
-        print(pSource)"""
-        pass
-    
-    def copy_source(self):
-        return dict(self.source)
+            pSource[f] = (len(SourceVisitor.funcs[f][0]), len(SourceVisitor.funcs[f][1]))
+        print(pSource)
 
-"""def main(source):
+
+def main(source):
     tree = ast.parse(source)
-    #print(ast.dump(tree))
+    # print(ast.dump(tree))
     usage_analyzer = SourceVisitor()
     usage_analyzer.visit(tree)
-    #print(usage_analyzer.source)"""
+    # print(usage_analyzer.source)
 
 
 if __name__ == '__main__':
@@ -573,4 +545,4 @@ print(fibonnaci(3))
     simpel_voorbeeld = """
 a = 1
 a = a + 1"""
-    #main(text)
+    main(text)
